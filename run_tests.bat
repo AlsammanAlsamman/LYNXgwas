@@ -37,6 +37,9 @@ javac -encoding UTF-8 -d bin -cp "bin%LIBCP%" ^
   tests\SerpentPlotBuilderTest.java ^
   tests\ToolLocatorTest.java ^
   tests\PlinkRunnerTest.java ^
+  tests\LdscRegressionTest.java ^
+  tests\ProjectMetadataFingerprintTest.java ^
+  tests\SnpRankModelTest.java ^
   tests\MultiLocusResultPersistenceTest.java ^
   tests\GlobalSearchIndexTest.java ^
   tests\RegulatoryPeakIndexTest.java ^
@@ -153,6 +156,15 @@ java -cp "bin%LIBCP%" ToolLocatorTest
 if %ERRORLEVEL% neq 0 set FAILED=1
 echo --- PlinkRunnerTest ---
 java -cp "bin%LIBCP%" PlinkRunnerTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+echo --- LdscRegressionTest ---
+java -cp "bin%LIBCP%" LdscRegressionTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+echo --- ProjectMetadataFingerprintTest ---
+java -cp "bin%LIBCP%" ProjectMetadataFingerprintTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+echo --- SnpRankModelTest ---
+java -cp "bin%LIBCP%" SnpRankModelTest
 if %ERRORLEVEL% neq 0 set FAILED=1
 
 echo.
