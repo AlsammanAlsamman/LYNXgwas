@@ -47,23 +47,31 @@ def save_config(workspace: Path, cfg: dict) -> None:
     config_path(workspace).write_text(json.dumps(cfg, indent=2))
 
 
+def sync_file(src: Path, dest: Path) -> None:
+    """Copy an app-owned file into the workspace when it is missing or differs from the installed
+    version, so upgrading the package also upgrades pages and tool descriptors."""
+    if dest.exists() and dest.read_bytes() == src.read_bytes():
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+
+
+def sync_tree(src: Path, dest: Path) -> None:
+    for item in src.rglob("*"):
+        if item.is_file():
+            sync_file(item, dest / item.relative_to(src))
+
+
 def ensure_workspace_assets(workspace: Path) -> None:
     workspace.mkdir(parents=True, exist_ok=True)
     web = bundled_path("web")
     for name in ("index.html", "viewer.html", "gene_constellation.html", "serpent_plot.html"):
-        dest = workspace / name
-        if not dest.exists():
-            shutil.copy2(web / name, dest)
-    dest_assets = workspace / "assets"
-    if not dest_assets.exists():
-        shutil.copytree(web / "assets", dest_assets)
-    dest_images = workspace / "docs" / "images"
-    if not dest_images.exists():
-        dest_images.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(web / "docs" / "images", dest_images)
-    dest_tools = workspace / "tools"
-    if not dest_tools.exists():
-        shutil.copytree(bundled_path("tools"), dest_tools)
+        sync_file(web / name, workspace / name)
+    sync_tree(web / "assets", workspace / "assets")
+    sync_tree(web / "docs" / "images", workspace / "docs" / "images")
+    # Tool descriptors are discovered from the workspace's tools/ folder; new tools (MAGMA, local
+    # heritability, causal-SNP ranking...) must reach existing workspaces after an upgrade.
+    sync_tree(bundled_path("tools"), workspace / "tools")
 
 
 def require_java() -> None:

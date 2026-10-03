@@ -17,6 +17,10 @@ own machine, with no cloud account or upload step involved. It also includes a b
 that can drive the same actions through natural language, running against a fully local model by
 default — see [How it works](#how-it-works) below for exactly what stays local and what doesn't.
 
+An online, multi-user edition with the same analyses is maintained as
+[LYNXgwas Server](https://github.com/AlsammanAlsamman/lynxgwas-server): accounts, private projects
+deleted after 15 days, read-only public datasets, and no AI agent or access to server files.
+
 ## How it works
 
 ![LYNXgwas architecture: local-first pipeline with an opt-in AI Agent](https://raw.githubusercontent.com/AlsammanAlsamman/LYNXgwas/main/docs/images/architecture_overview.png)

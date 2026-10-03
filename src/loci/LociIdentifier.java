@@ -316,7 +316,7 @@ public class LociIdentifier {
                 "--clump-kb", String.valueOf(params.clumpKb),
                 "--chr", chr,
                 "--allow-extra-chr",
-                "--memory", "20000",
+                "--memory", "6000",
                 "--out", outPrefix.toString(),
                 "--silent"
             );
@@ -478,6 +478,10 @@ public class LociIdentifier {
     // ── Helpers ─────────────────────────────────────────────────────────
 
     static String findPlink() {
+        // The server's own bundled copy first, so an unexpected PATH entry is never preferred
+        for (String path : new String[]{"bin/plink", "bin/plink.exe"}) {
+            if (new File(path).isFile()) return path;
+        }
         for (String name : new String[]{"plink", "plink2", "plink.exe", "plink2.exe"}) {
             try {
                 Process p = new ProcessBuilder(name, "--version").redirectErrorStream(true).start();
@@ -489,7 +493,6 @@ public class LociIdentifier {
         }
         // Try common Windows paths
         String[] paths = {
-            "C:/Users/alsammana/Documents/DataResources/plink/plink.exe",
             "plink/plink.exe", "tools/plink.exe"
         };
         for (String path : paths) {

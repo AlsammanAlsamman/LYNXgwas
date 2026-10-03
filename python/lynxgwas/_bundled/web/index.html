@@ -358,6 +358,9 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
     <button class="btn btn-secondary" onclick="openLocusMatrix()">
       Gene Constellation
     </button>
+    <button class="btn btn-secondary" onclick="openLocusMatrix('serpent')" title="Linear cross-dataset view: one serpent per locus through every dataset, plus a category analysis of what drives shared loci">
+      Locus Serpent Plot
+    </button>
     <button class="btn btn-secondary" onclick="openSusiex()">
       SuSiEx
     </button>
@@ -366,6 +369,10 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
     </button>
     <button class="btn btn-secondary" onclick="exportProjectsInfo()">
       Info
+    </button>
+    <button class="btn btn-secondary" onclick="githubOpenImport()" title="Extract a project from a GitHub repository">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-2px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      Import from GitHub
     </button>
     <button class="btn btn-primary" id="btn-new" onclick="newProject()">
       + New project
@@ -418,6 +425,27 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
     </div>
   </div>
 
+  <div class="table-wrap" style="margin-top:1.5rem">
+    <h3 style="font-size:0.95rem;margin:0 0 0.5rem">Locus Serpent Plot runs</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Datasets</th>
+          <th>Ref Panel</th>
+          <th>Loci</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="serpent-tbody"></tbody>
+    </table>
+    <div class="empty" id="serpent-empty" style="display:none">
+      <p>No Locus Serpent Plot runs yet. Click <b>Locus Serpent Plot</b> above, pick the datasets to compare, and run it.</p>
+    </div>
+  </div>
+
   <details class="manual-panel">
     <summary>Add a project manually</summary>
     <ol>
@@ -447,6 +475,12 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
       <h4 style="font-size:0.9rem;margin:1rem 0 0.5rem">Shared Storage</h4>
       <p style="color:#666;font-size:0.8rem;margin-bottom:0.5rem">Point at a shared lab folder (or a Google Drive/Dropbox desktop sync folder — any local or network path works), or a git repo you already have your own credentials for, so reference panels and annotation files don't need to be re-downloaded per machine.</p>
       <div id="sharedstorage-form" style="font-size:0.85rem"></div>
+
+      <h4 style="font-size:0.9rem;margin:1rem 0 0.5rem">GitHub (save / extract projects)</h4>
+      <p style="color:#666;font-size:0.8rem;margin-bottom:0.5rem">Save a project to a GitHub repository (private repos work fine) or extract one back — from the
+      GitHub "Save" button on a project row, or "Import from GitHub" above. LYNXgwas never stores your token
+      itself; choose one of the two ways below to authenticate.</p>
+      <div id="github-settings-form" style="font-size:0.85rem"></div>
 
       <h4 style="font-size:0.9rem;margin:1rem 0 0.5rem">Cluster (HPC)</h4>
       <p style="color:#666;font-size:0.8rem;margin-bottom:0.5rem">Optional. Off by default — local processing is unaffected either way. Configures LYNXgwas to submit analysis jobs to a cluster over your own SSH access (key-based only) using Snakemake, instead of running locally.</p>
@@ -495,10 +529,33 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
 </div>
 </div>
 
+<!-- ── GitHub push modal ───────────────────────────────────── -->
+<div class="wizard-overlay" id="github-push-overlay">
+<div class="wizard-box" style="max-width:520px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Save project to GitHub</h3>
+    <button class="btn btn-secondary" onclick="githubCloseModals()" style="padding:0.3rem 0.7rem">&times;</button>
+  </div>
+  <div id="github-push-content"></div>
+</div>
+</div>
+
+<!-- ── GitHub import modal ─────────────────────────────────── -->
+<div class="wizard-overlay" id="github-import-overlay">
+<div class="wizard-box" style="max-width:520px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Extract project from GitHub</h3>
+    <button class="btn btn-secondary" onclick="githubCloseModals()" style="padding:0.3rem 0.7rem">&times;</button>
+  </div>
+  <div id="github-import-content"></div>
+</div>
+</div>
+
 <script>
 const API = '';
 let projects = [];
 let pollTimers = {};
+const GITHUB_ICON_SVG = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
 
 async function loadProjects() {
   try {
@@ -580,6 +637,7 @@ function render() {
       + '<button class="btn btn-secondary" style="background:#d1fae5;color:#065f46" onclick="openProjectAnalysis(\'' + esc(p.id) + '\')" title="Build analysis base artifacts">Analyze</button>'
       + '<button class="btn btn-secondary" onclick="openGwasQc(\'' + esc(p.id) + '\')" title="Genomic inflation / confounding triage">QC</button>'
       + '<button class="btn btn-secondary" onclick="openEvidence(\'' + esc(p.id) + '\')" title="Attach gene-level evidence data (PPI, expression, etc.)">Evidence</button>'
+      + '<button class="btn btn-secondary" onclick="githubOpenPush(\'' + esc(p.id) + '\')" title="Save this project to a GitHub repository">' + GITHUB_ICON_SVG + ' Save</button>'
       + '<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem" onclick="deleteProject(\'' + esc(p.id) + '\')" title="Delete project">Delete</button>'
       + '</td></tr>';
   }).join('');
@@ -939,6 +997,10 @@ function wizRenderParams(c) {
     + '<div class="wiz-field"><label>Ancestry / Population</label>'
     + '<input data-wiz-key="ancestry" value="' + escAttr(cfg['ancestry'] || cfg['ref.panel.population'] || '') + '">'
     + '<div class="hint">E.g. EUR, EAS, AFR, AMR, SAS, Hispanic, etc.</div></div>'
+    + '<div class="wiz-field"><label>Population prevalence (case-control traits)</label>'
+    + '<input data-wiz-key="trait.prevalence" value="' + escAttr(cfg['trait.prevalence'] || '') + '" placeholder="e.g. 0.01">'
+    + '<div class="hint">Fraction of the population with the disease. Used only to put SNP-heritability on the liability scale; '
+    + 'leave blank to report the observed scale only.</div></div>'
     + '<div class="wiz-field"><label>Disease / Trait name</label>'
     + '<input data-wiz-key="disease.name" value="' + escAttr(cfg['disease.name'] || '') + '" placeholder="e.g. Schizophrenia">'
     + '<div class="hint">Used to tell "known for this exact disease" apart from "known for something else" '
@@ -966,6 +1028,7 @@ function wizRenderPreview(c) {
     ['Trait type', cfg['trait.type'] || '(not set)'],
     ['Genome build', cfg['genome.build'] || 'GRCh37'],
     ['Ancestry', cfg['ancestry'] || cfg['ref.panel.population'] || '(not set)'],
+    ['Population prevalence', cfg['trait.prevalence'] || '(not set)'],
     ['Disease / Trait', cfg['disease.name'] || '(not set — any prior report counts as "known")']
   ];
   c.innerHTML = '<table class="wiz-summary-table">'
@@ -982,7 +1045,7 @@ async function wizSubmit() {
     'col.beta','col.or','col.se','col.n','col.maf','col.info','top.snp.file',
     'locus.padding','ld.enabled','ld.triangle.boundary','ld.r2.threshold',
     'ld.parallel.jobs','threads','max.snps.per.locus','split.ld.threshold','split.min.distance.bp',
-    'sample.n','n.cases','n.controls','trait.type','effect.type','genome.build','ancestry','disease.name'];
+    'sample.n','n.cases','n.controls','trait.type','trait.prevalence','effect.type','genome.build','ancestry','disease.name'];
   keys.forEach(function(k) { if (cfg[k] !== undefined) configBody[k] = cfg[k]; });
 
   try {
@@ -1281,6 +1344,139 @@ async function loadResources() {
     renderHpc(gc.hpc || {enabled:false, ssh_host:'', ssh_user:'', ssh_key_path:'', remote_work_dir:'',
       poll_interval_min_minutes:5, poll_interval_max_minutes:20, module_names:{}});
   } catch(e) {}
+  renderGithubSettings();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GitHub project save/extract (Phase 6) — see DECISIONS_PHASE6.md
+// ═══════════════════════════════════════════════════════════════
+var githubOneTimeMode = true; // default to the safest option: nothing stored, ask each time
+
+async function renderGithubSettings() {
+  var el = document.getElementById('github-settings-form');
+  if (!el) return;
+  el.innerHTML = '<p style="color:#888">Checking...</p>';
+  var configured = false;
+  try {
+    var r = await (await fetch(API + '/api/github/token-status')).json();
+    configured = !!r.configured;
+  } catch (e) {}
+
+  if (configured) {
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.7rem;background:#d1fae5;border-radius:6px">'
+      + '<span style="color:#065f46;font-weight:600">&#10003; A GitHub credential is saved</span>'
+      + '<span style="color:#666;font-size:0.78rem">(via your system\'s own git credential manager — LYNXgwas never stored it itself)</span>'
+      + '</div>'
+      + '<button class="btn btn-secondary" style="margin-top:0.5rem" onclick="githubForgetToken()">Forget saved credential</button>';
+  } else {
+    el.innerHTML =
+      '<div class="agent-mode-row" style="display:flex;gap:0.5rem;margin-bottom:0.5rem">'
+      + '<label style="flex:1;display:flex;align-items:center;gap:0.3rem;border:1px solid #ccc;border-radius:4px;padding:0.4rem 0.5rem;cursor:pointer">'
+      + '<input type="radio" name="gh-cred-mode" value="onetime" checked onchange="githubOneTimeMode=true"> Ask me each time (most private — nothing stored)</label>'
+      + '<label style="flex:1;display:flex;align-items:center;gap:0.3rem;border:1px solid #ccc;border-radius:4px;padding:0.4rem 0.5rem;cursor:pointer">'
+      + '<input type="radio" name="gh-cred-mode" value="saved" onchange="githubOneTimeMode=false"> Save it the safe way (your OS credential manager)</label>'
+      + '</div>'
+      + '<div id="gh-save-row" style="display:none;gap:0.4rem;align-items:center">'
+      + '<input type="password" id="gh-token-input" placeholder="GitHub personal access token (ghp_... or fine-grained)" style="flex:1;padding:0.35rem 0.5rem;border:1px solid #ccc;border-radius:4px">'
+      + '<button class="btn btn-primary" onclick="githubSaveToken()">Save securely</button>'
+      + '</div>'
+      + '<p style="color:#888;font-size:0.75rem;margin-top:0.4rem">Tip: create a <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">fine-grained token</a> scoped to only the repo(s) you\'ll use, not all your repos. With "Ask me each time", you\'ll paste the token directly into the Push/Import dialog and it is never written to disk.</p>';
+    document.querySelectorAll('input[name="gh-cred-mode"]').forEach(function(r) {
+      r.addEventListener('change', function() {
+        document.getElementById('gh-save-row').style.display = (r.value === 'saved' && r.checked) ? 'flex' : 'none';
+      });
+    });
+  }
+}
+
+async function githubSaveToken() {
+  var token = document.getElementById('gh-token-input').value.trim();
+  if (!token) return;
+  var r = await (await fetch(API + '/api/github/token', { method: 'POST', body: JSON.stringify({ token: token }) })).json();
+  alert(r.message || (r.ok ? 'Saved.' : 'Could not save.'));
+  if (r.ok) renderGithubSettings();
+}
+
+async function githubForgetToken() {
+  if (!confirm('Remove the saved GitHub credential?')) return;
+  var r = await (await fetch(API + '/api/github/token', { method: 'DELETE' })).json();
+  alert(r.message || (r.ok ? 'Removed.' : 'Could not remove.'));
+  renderGithubSettings();
+}
+
+function githubCloseModals() {
+  document.getElementById('github-push-overlay').classList.remove('open');
+  document.getElementById('github-import-overlay').classList.remove('open');
+}
+
+function githubOpenPush(projectId) {
+  document.getElementById('github-push-content').innerHTML =
+    '<div class="wiz-field"><label>Repository URL</label>'
+    + '<input id="gh-push-url" placeholder="https://github.com/you/your-repo.git"></div>'
+    + '<div class="wiz-field"><label>Branch</label><input id="gh-push-branch" value="main"></div>'
+    + '<div class="wiz-field"><label>Commit message</label><input id="gh-push-msg" value="Update from LYNXgwas"></div>'
+    + '<div class="wiz-field" id="gh-push-token-field"><label>One-time token (leave blank to use a saved credential)</label>'
+    + '<input id="gh-push-token" type="password" placeholder="Only needed if you have not saved a credential"></div>'
+    + '<p style="color:#888;font-size:0.78rem">The private repo you push to is created by you on GitHub first (empty is fine) — LYNXgwas only pushes into it, it does not create repos.</p>'
+    + '<button class="btn btn-primary" onclick="githubSubmitPush(' + JSON.stringify(projectId) + ')">Push</button>'
+    + '<div id="gh-push-status" style="margin-top:0.5rem;font-size:0.85rem"></div>';
+  document.getElementById('github-push-overlay').classList.add('open');
+}
+
+async function githubSubmitPush(projectId) {
+  var repoUrl = document.getElementById('gh-push-url').value.trim();
+  var branch = document.getElementById('gh-push-branch').value.trim();
+  var msg = document.getElementById('gh-push-msg').value.trim();
+  var token = document.getElementById('gh-push-token').value.trim();
+  var status = document.getElementById('gh-push-status');
+  status.textContent = 'Pushing...';
+  try {
+    var r = await (await fetch(API + '/api/project/' + encodeURIComponent(projectId) + '/github/push', {
+      method: 'POST',
+      body: JSON.stringify({ repo_url: repoUrl, branch: branch, commit_message: msg, token: token })
+    })).json();
+    status.style.color = r.ok ? '#059669' : '#dc2626';
+    status.textContent = r.message || (r.ok ? 'Done.' : 'Failed.');
+  } catch (e) {
+    status.style.color = '#dc2626';
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+function githubOpenImport() {
+  document.getElementById('github-import-content').innerHTML =
+    '<div class="wiz-field"><label>Repository URL</label>'
+    + '<input id="gh-import-url" placeholder="https://github.com/you/your-repo.git"></div>'
+    + '<div class="wiz-field"><label>Branch</label><input id="gh-import-branch" value="main"></div>'
+    + '<div class="wiz-field"><label>New project ID (folder name)</label><input id="gh-import-id" placeholder="my-imported-project"></div>'
+    + '<div class="wiz-field"><label>One-time token (leave blank to use a saved credential)</label>'
+    + '<input id="gh-import-token" type="password" placeholder="Only needed if you have not saved a credential"></div>'
+    + '<button class="btn btn-primary" onclick="githubSubmitImport()">Extract</button>'
+    + '<div id="gh-import-status" style="margin-top:0.5rem;font-size:0.85rem"></div>';
+  document.getElementById('github-import-overlay').classList.add('open');
+}
+
+async function githubSubmitImport() {
+  var repoUrl = document.getElementById('gh-import-url').value.trim();
+  var branch = document.getElementById('gh-import-branch').value.trim();
+  var projectId = document.getElementById('gh-import-id').value.trim();
+  var token = document.getElementById('gh-import-token').value.trim();
+  var status = document.getElementById('gh-import-status');
+  if (!projectId) { status.style.color = '#dc2626'; status.textContent = 'Project ID is required.'; return; }
+  status.textContent = 'Extracting...';
+  try {
+    var r = await (await fetch(API + '/api/github/import', {
+      method: 'POST',
+      body: JSON.stringify({ repo_url: repoUrl, branch: branch, project_id: projectId, token: token })
+    })).json();
+    status.style.color = r.ok ? '#059669' : '#dc2626';
+    status.textContent = r.message || (r.ok ? 'Done.' : 'Failed.');
+    if (r.ok) { loadProjects(); setTimeout(githubCloseModals, 1200); }
+  } catch (e) {
+    status.style.color = '#dc2626';
+    status.textContent = 'Error: ' + e.message;
+  }
 }
 
 // ── Shared Storage ──────────────────────────────────────────
@@ -2056,7 +2252,11 @@ var locusMatrixPollTimer = null;
 var gcWiz = { step: 0 }; // Gene Constellation setup wizard state (separate from the project-creation `wiz`)
 var GC_STEPS = ['Datasets', 'Reference panel & review'];
 
-async function openLocusMatrix() {
+function gcTitle() {
+  return gcWiz.kind === 'serpent' ? 'Locus Serpent Plot — cross-dataset comparison' : 'Gene Constellation — cross-dataset comparison';
+}
+
+async function openLocusMatrix(kind) {
   var overlay = document.getElementById('locus-matrix-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -2067,7 +2267,7 @@ async function openLocusMatrix() {
     document.body.appendChild(overlay);
   }
   locusMatrixSelected = {};
-  gcWiz = { step: 0, name: '', refPanelId: '' };
+  gcWiz = { step: 0, name: '', refPanelId: '', kind: kind === 'serpent' ? 'serpent' : 'constellation' };
   if (locusMatrixPollTimer) { clearInterval(locusMatrixPollTimer); locusMatrixPollTimer = null; }
   await renderLocusMatrixForm();
   overlay.classList.add('open');
@@ -2091,7 +2291,7 @@ function gcStepsBarHtml() {
 async function renderLocusMatrixForm() {
   var box = document.getElementById('locus-matrix-box');
   if (gcWiz.step === 0) {
-    box.innerHTML = '<h3>Gene Constellation — cross-dataset comparison</h3>'
+    box.innerHTML = '<h3>' + gcTitle() + '</h3>'
       + gcStepsBarHtml()
       + '<p style="color:#666;font-size:0.85rem;margin:0.5rem 0 1rem">'
       + 'Pick two or more datasets to compare. Each SNP\'s best p-value across the selected '
@@ -2127,7 +2327,7 @@ async function renderLocusMatrixForm() {
     var p = projects.find(function(x) { return x.id === id; });
     return p ? (p.name || p.id) : id;
   });
-  box.innerHTML = '<h3>Gene Constellation — cross-dataset comparison</h3>'
+  box.innerHTML = '<h3>' + gcTitle() + '</h3>'
     + gcStepsBarHtml()
     + '<div style="font-size:0.85rem;font-weight:600;margin-bottom:0.4rem">Selected datasets (' + ids.length + ')</div>'
     + '<div style="font-size:0.82rem;color:#475569;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:0.5rem 0.75rem;margin-bottom:1rem">'
@@ -2194,7 +2394,7 @@ async function runLocusMatrix() {
   var name = gcWiz.name || '';
 
   var box = document.getElementById('locus-matrix-box');
-  box.innerHTML = '<h3>Gene Constellation</h3>'
+  box.innerHTML = '<h3>' + (gcWiz.kind === 'serpent' ? 'Locus Serpent Plot' : 'Gene Constellation') + '</h3>'
     + '<div id="lm-progress" style="margin:1rem 0;font-size:0.85rem;color:#475569">Starting…</div>'
     + '<div style="display:flex;justify-content:flex-end">'
     + '<button class="btn btn-secondary" onclick="closeLocusMatrix()">Close</button></div>';
@@ -2202,7 +2402,7 @@ async function runLocusMatrix() {
   try {
     var resp = await fetch(API + '/api/locus-matrix-run', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ project_ids: ids, ref_panel_id: refPanelId, name: name })
+      body: JSON.stringify({ project_ids: ids, ref_panel_id: refPanelId, name: name, kind: gcWiz.kind })
     });
     var d = await resp.json();
     if (!resp.ok || d.error) {
@@ -2235,7 +2435,9 @@ function pollLocusMatrixProgress(jobId) {
         } else {
           el.innerHTML = '<div style="color:#065f46;margin-bottom:0.75rem">Done &mdash; ' + p.loci_found + ' loci found.</div>'
             + '<div style="display:flex;gap:0.5rem">'
-            + '<a class="btn btn-primary" href="gene_constellation.html?job=' + encodeURIComponent(jobId) + '" target="_blank">View Constellation &rarr;</a>'
+            + (gcWiz.kind === 'serpent'
+                ? '<a class="btn btn-primary" href="serpent_plot.html?job=' + encodeURIComponent(jobId) + '" target="_blank">View Serpent Plot &rarr;</a>'
+                : '<a class="btn btn-primary" href="gene_constellation.html?job=' + encodeURIComponent(jobId) + '" target="_blank">View Constellation &rarr;</a>')
             + '<a class="btn btn-secondary" href="' + API + '/api/locus-matrix-export?job=' + encodeURIComponent(jobId) + '">Export Excel</a>'
             + '</div>';
         }
@@ -2588,41 +2790,49 @@ async function deleteEvidence(projectId, name) {
 }
 
 async function loadLocusMatrixJobs() {
-  var tbody = document.getElementById('locus-matrix-tbody');
-  var empty = document.getElementById('locus-matrix-empty');
-  if (!tbody) return;
   try {
     var jobs = await (await fetch(API + '/api/locus-matrix-jobs')).json();
-    if (!jobs.length) {
-      tbody.innerHTML = '';
-      empty.style.display = '';
-      return;
-    }
-    empty.style.display = 'none';
-    tbody.innerHTML = jobs.map(function(j) {
-      var statusBadge = j.status === 'done'
-        ? '<span class="badge badge-ok">Done</span>'
-        : j.status === 'error'
-        ? '<span class="badge badge-error" title="' + escAttr(j.error || '') + '">Error</span>'
-        : '<span class="badge badge-proc">Running…</span>';
-      var actions = (j.status === 'done'
-        ? '<a class="btn btn-secondary" href="gene_constellation.html?job=' + encodeURIComponent(j.job_id) + '" target="_blank">View</a> '
-          + '<a class="btn btn-secondary" href="' + API + '/api/locus-matrix-export?job=' + encodeURIComponent(j.job_id) + '">Export</a> '
-        : '')
-        + '<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem" onclick="deleteLocusMatrixJob(\'' + esc(j.job_id) + '\')">Delete</button>';
-      return '<tr>'
-        + '<td><b>' + esc(j.name) + '</b></td>'
-        + '<td class="desc">' + esc(j.datasets) + '</td>'
-        + '<td>' + esc(j.ref_panel_label) + '</td>'
-        + '<td>' + (j.status === 'done' ? j.loci_found : '—') + '</td>'
-        + '<td>' + statusBadge + '</td>'
-        + '<td>' + formatDate(j.created_at) + '</td>'
-        + '<td class="actions">' + actions + '</td>'
-        + '</tr>';
-    }).join('');
+    renderRunsTable('locus-matrix-tbody', 'locus-matrix-empty', jobs.filter(function(j) { return j.kind !== 'serpent'; }), 'constellation');
+    renderRunsTable('serpent-tbody', 'serpent-empty', jobs.filter(function(j) { return j.kind === 'serpent'; }), 'serpent');
   } catch (e) {
-    tbody.innerHTML = '';
+    ['locus-matrix-tbody', 'serpent-tbody'].forEach(function(id) { var t = document.getElementById(id); if (t) t.innerHTML = ''; });
   }
+}
+
+// One runs table (Gene Constellation or Locus Serpent Plot). Both views read the same completed job,
+// so every finished run also links to the other view.
+function renderRunsTable(tbodyId, emptyId, jobs, kind) {
+  var tbody = document.getElementById(tbodyId);
+  var empty = document.getElementById(emptyId);
+  if (!tbody) return;
+  if (!jobs.length) { tbody.innerHTML = ''; if (empty) empty.style.display = ''; return; }
+  if (empty) empty.style.display = 'none';
+  tbody.innerHTML = jobs.map(function(j) {
+    var statusBadge = j.status === 'done'
+      ? '<span class="badge badge-ok">Done</span>'
+      : j.status === 'error'
+      ? '<span class="badge badge-error" title="' + escAttr(j.error || '') + '">Error</span>'
+      : '<span class="badge badge-proc">Running…</span>';
+    var jid = encodeURIComponent(j.job_id);
+    var primary = kind === 'serpent'
+      ? '<a class="btn btn-secondary" href="serpent_plot.html?job=' + jid + '" target="_blank">View</a> '
+        + '<a class="btn btn-secondary" href="gene_constellation.html?job=' + jid + '" target="_blank" title="Same run as a Gene Constellation">Constellation</a> '
+      : '<a class="btn btn-secondary" href="gene_constellation.html?job=' + jid + '" target="_blank">View</a> '
+        + '<a class="btn btn-secondary" href="serpent_plot.html?job=' + jid + '" target="_blank" title="Same run as a Locus Serpent Plot">Serpent</a> ';
+    var actions = (j.status === 'done'
+      ? primary + '<a class="btn btn-secondary" href="' + API + '/api/locus-matrix-export?job=' + jid + '">Export</a> '
+      : '')
+      + '<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem" onclick="deleteLocusMatrixJob(\'' + esc(j.job_id) + '\')">Delete</button>';
+    return '<tr>'
+      + '<td><b>' + esc(j.name) + '</b></td>'
+      + '<td class="desc">' + esc(j.datasets) + '</td>'
+      + '<td>' + esc(j.ref_panel_label) + '</td>'
+      + '<td>' + (j.status === 'done' ? j.loci_found : '—') + '</td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td>' + formatDate(j.created_at) + '</td>'
+      + '<td class="actions">' + actions + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 async function deleteLocusMatrixJob(jobId) {
@@ -2787,6 +2997,7 @@ async function openLocusAnalysis(projectId) {
   // Buttons
   html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">'
     + '<button class="btn btn-secondary" onclick="openProjectAnalysis(\'' + esc(projectId) + '\')">Back</button>'
+    + '<button class="btn btn-secondary" id="run-all-btn" title="Run this tool on every locus whose inputs are built (skips the MHC and loci already done)">Run on all loci</button>'
     + '<button class="btn btn-primary" style="background:#059669" id="run-tool-btn">Run</button></div>';
 
   contentEl.innerHTML = html;
@@ -2821,8 +3032,66 @@ async function openLocusAnalysis(projectId) {
     ph += '</div>';
     paramsDiv.innerHTML = ph;
   }
+  function updateRunAllVisibility() {
+    var t = tools[+toolSelect.value];
+    // coloc and GWAMA compare datasets, so a per-dataset batch makes no sense for them
+    document.getElementById('run-all-btn').style.display = (t.tool === 'coloc' || t.tool === 'gwama_meta') ? 'none' : '';
+  }
   renderParams(0);
-  toolSelect.addEventListener('change', function() { renderParams(+toolSelect.value); });
+  updateRunAllVisibility();
+  toolSelect.addEventListener('change', function() { renderParams(+toolSelect.value); updateRunAllVisibility(); });
+
+  // Batch: same tool + parameters on every ready locus of this project
+  document.getElementById('run-all-btn').addEventListener('click', async function() {
+    var t = tools[+toolSelect.value];
+    var allBtn = document.getElementById('run-all-btn');
+    var statusEl = document.getElementById('run-tool-status');
+    var progressEl = document.getElementById('run-tool-progress');
+    var fillEl = document.getElementById('run-tool-fill');
+    if (allBtn.dataset.running === '1') {   // the button reads "Cancel" while a batch runs
+      await fetch(API + '/api/project/' + encodeURIComponent(projectId) + '/analysis/run-all-cancel?tool=' + encodeURIComponent(t.tool), { method: 'POST' });
+      allBtn.disabled = true;
+      return;
+    }
+    var body = { tool: t.tool, only_missing: 'true', parallel: '2' };
+    paramsDiv.querySelectorAll('[data-param]').forEach(function(el) {
+      body[el.dataset.param] = el.type === 'checkbox' ? String(el.checked) : el.value;
+    });
+    allBtn.disabled = true;
+    var res = await fetch(API + '/api/project/' + encodeURIComponent(projectId) + '/analysis/run-all', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    var d = await res.json().catch(function() { return {}; });
+    if (!res.ok) { statusEl.textContent = 'Error: ' + (d.error || 'could not start'); allBtn.disabled = false; return; }
+    progressEl.style.display = '';
+    allBtn.textContent = 'Cancel';
+    allBtn.dataset.running = '1';
+    allBtn.disabled = false;
+    var poll = setInterval(async function() {
+      try {
+        var r = await fetch(API + '/api/project/' + encodeURIComponent(projectId) + '/analysis/run-all-progress?tool=' + encodeURIComponent(t.tool));
+        if (!r.ok) return;
+        var b = await r.json();
+        var pct = b.total ? Math.round(100 * b.done / b.total) : 100;
+        fillEl.style.width = pct + '%';
+        statusEl.textContent = (t.label || t.tool) + ': ' + b.done + ' / ' + b.total + ' loci'
+          + ' (' + b.ok + ' ok' + (b.failed ? ', ' + b.failed + ' failed' : '') + ', ' + b.skipped + ' skipped)'
+          + (b.current ? ' - now ' + b.current : '');
+        if (b.finished) {
+          clearInterval(poll);
+          fillEl.style.width = '100%';
+          statusEl.innerHTML = '<span style="color:' + (b.failed ? '#b45309' : '#059669') + ';font-weight:600">'
+            + esc((t.label || t.tool) + (b.cancelled ? ' cancelled: ' : ' finished: ') + b.ok + ' loci done, ' + b.failed + ' failed, '
+            + b.skipped + ' skipped (not ready, MHC, or already done)') + '</span>'
+            + (b.errors.length ? '<details style="margin-top:4px"><summary>Failures</summary><div style="max-height:140px;overflow:auto;font-size:0.75rem">'
+               + b.errors.map(esc).join('<br>') + '</div></details>' : '')
+            + ' Open the <a href="viewer.html?project=' + encodeURIComponent(projectId) + '" style="color:#4f46e5">Viewer</a> to see the results.';
+          allBtn.textContent = 'Run on all loci';
+          allBtn.dataset.running = '0';
+          allBtn.disabled = false;
+        }
+      } catch (e) {}
+    }, 2000);
+  });
 
   // Run button
   document.getElementById('run-tool-btn').addEventListener('click', async function() {

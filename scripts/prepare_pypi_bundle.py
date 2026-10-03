@@ -46,6 +46,7 @@ def copy_web() -> None:
     shutil.copy2(ROOT / "index.html", dest / "index.html")
     shutil.copy2(ROOT / "viewer.html", dest / "viewer.html")
     shutil.copy2(ROOT / "gene_constellation.html", dest / "gene_constellation.html")
+    shutil.copy2(ROOT / "serpent_plot.html", dest / "serpent_plot.html")
     # README-only images (screenshots) don't belong in the runtime app bundle
     shutil.copytree(ROOT / "assets", dest / "assets", ignore=shutil.ignore_patterns("screenshots"))
     # index.html/viewer.html reference the logo/favicon at this exact relative path
@@ -53,10 +54,18 @@ def copy_web() -> None:
 
 
 def copy_tools() -> None:
+    """Tool descriptors plus what the tools need at run time: the R scripts (joint fine-mapping,
+    local heritability), the trained causal-SNP ranking model and the UK Biobank LD helper."""
     dest = BUNDLED / "tools"
     reset(dest)
-    for yaml_file in (ROOT / "tools").glob("*.yaml"):
-        shutil.copy2(yaml_file, dest / yaml_file.name)
+    for f in list((ROOT / "tools").glob("*.yaml")) + list((ROOT / "tools").glob("*.json")):
+        shutil.copy2(f, dest / f.name)
+    (dest / "r").mkdir(parents=True, exist_ok=True)
+    for r_file in (ROOT / "tools" / "r").glob("*.R"):
+        shutil.copy2(r_file, dest / "r" / r_file.name)
+    scripts = BUNDLED / "scripts"
+    reset(scripts)
+    shutil.copy2(ROOT / "scripts" / "ukbb_ld.py", scripts / "ukbb_ld.py")
 
 
 def main() -> None:
