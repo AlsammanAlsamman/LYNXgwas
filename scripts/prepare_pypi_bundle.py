@@ -47,6 +47,7 @@ def copy_web() -> None:
     shutil.copy2(ROOT / "viewer.html", dest / "viewer.html")
     shutil.copy2(ROOT / "gene_constellation.html", dest / "gene_constellation.html")
     shutil.copy2(ROOT / "serpent_plot.html", dest / "serpent_plot.html")
+    shutil.copy2(ROOT / "summary.html", dest / "summary.html")
     # README-only images (screenshots) don't belong in the runtime app bundle
     shutil.copytree(ROOT / "assets", dest / "assets", ignore=shutil.ignore_patterns("screenshots"))
     # index.html/viewer.html reference the logo/favicon at this exact relative path

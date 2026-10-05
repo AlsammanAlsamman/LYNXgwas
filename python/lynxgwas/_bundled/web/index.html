@@ -634,6 +634,7 @@ function render() {
       + '<td>' + rsidBadge(p) + '</td>'
       + '<td>' + lociBadge(p) + '</td>'
       + '<td class="actions" onclick="event.stopPropagation()">'
+      + '<button class="btn btn-secondary" style="background:#dbeafe;color:#1e3a8a;font-weight:600" onclick="openSummary(\'' + esc(p.id) + '\')" title="Results of every analysis, with plots, and what still needs to be run">Summary</button>'
       + '<button class="btn btn-secondary" onclick="editConfig(\'' + esc(p.id) + '\')" title="Edit configuration">Edit</button>'
       + '<button class="btn btn-secondary" onclick="reprocess(\'' + esc(p.id) + '\')" title="Reprocess">Reprocess</button>'
       + '<button class="btn btn-secondary" onclick="exportExcel(\'' + esc(p.id) + '\')" title="Export Excel">Excel</button>'
@@ -1071,6 +1072,8 @@ async function wizSubmit() {
 }
 
 function escAttr(s) { return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function openSummary(id) { location.href = 'summary.html?project=' + encodeURIComponent(id); }
 
 async function exportExcel(id) {
   // Open folder picker to choose save location

@@ -126,6 +126,7 @@ cp -f index.html output/index.html 2>/dev/null || true
 cp -f viewer.html output/viewer.html 2>/dev/null || true
 cp -f gene_constellation.html output/gene_constellation.html 2>/dev/null || true
 cp -f serpent_plot.html output/serpent_plot.html 2>/dev/null || true
+cp -f summary.html output/summary.html 2>/dev/null || true
 cp -f annotations.js output/annotations.js 2>/dev/null || true
 cp -Rf assets/. output/assets/ 2>/dev/null || true
 if [ -f projects/config.properties.template ]; then

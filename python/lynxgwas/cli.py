@@ -65,7 +65,7 @@ def sync_tree(src: Path, dest: Path) -> None:
 def ensure_workspace_assets(workspace: Path) -> None:
     workspace.mkdir(parents=True, exist_ok=True)
     web = bundled_path("web")
-    for name in ("index.html", "viewer.html", "gene_constellation.html", "serpent_plot.html"):
+    for name in ("index.html", "viewer.html", "gene_constellation.html", "serpent_plot.html", "summary.html"):
         sync_file(web / name, workspace / name)
     sync_tree(web / "assets", workspace / "assets")
     sync_tree(web / "docs" / "images", workspace / "docs" / "images")

@@ -126,6 +126,7 @@ copy /Y index.html output\index.html >nul 2>&1
 copy /Y viewer.html output\viewer.html >nul 2>&1
 copy /Y gene_constellation.html output\gene_constellation.html >nul 2>&1
 copy /Y serpent_plot.html output\serpent_plot.html >nul 2>&1
+copy /Y summary.html output\summary.html >nul 2>&1
 copy /Y annotations.js output\annotations.js >nul 2>&1
 if exist output\annotations.js (
     rem already copied from root
