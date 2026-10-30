@@ -46,6 +46,7 @@ public class OllamaPuller {
 
     private static void runPull(String ollamaBaseUrl, String model) {
         try {
+            netguard.OfflineMode.check(ollamaBaseUrl);   // strict offline mode: nothing leaves the computer
             HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
             String body = "{\"name\":" + jsonStr(model) + ",\"stream\":true}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(ollamaBaseUrl + "/api/pull"))

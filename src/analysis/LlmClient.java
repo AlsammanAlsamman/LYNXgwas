@@ -61,6 +61,7 @@ public class LlmClient {
             throws IOException, InterruptedException {
         String body = buildRequestJson(messages, toolSchemas);
 
+        netguard.OfflineMode.check(baseUrl);   // strict offline mode: nothing leaves the computer
         HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + "/chat/completions"))
             .timeout(Duration.ofSeconds(120))

@@ -16,6 +16,8 @@ from pathlib import Path
 
 SERVER_URL = "http://localhost:8765/"
 PLINK_DOWNLOAD_PAGE = "https://www.cog-genomics.org/plink/1.9/"
+# --offline: the launcher downloads nothing and opens no web page, and the app contacts no other computer
+OFFLINE = False
 GENCODE_URL = (
     "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/"
     "gencode.v44.basic.annotation.gff3.gz"
@@ -143,6 +145,9 @@ def resolve_plink(workspace: Path, cli_arg: str | None) -> Path | None:
             return p
         print(f"'{p}' does not exist — continuing without PLINK.")
         return None
+    if OFFLINE:
+        print("Offline mode: not opening the download page. Re-run with --plink <path>.")
+        return None
     webbrowser.open(PLINK_DOWNLOAD_PAGE)
     print("Re-run lynxgwas with --plink <path> once you've downloaded it.")
     return None
@@ -182,6 +187,9 @@ def resolve_gff3(workspace: Path, cli_arg: str | None) -> Path | None:
             save_config(workspace, cfg)
             return p
         print(f"'{p}' does not exist — continuing without a GFF3 annotation.")
+        return None
+    if OFFLINE:
+        print("Offline mode: not downloading GENCODE. Re-run with --gff3 <path>.")
         return None
     resources_dir.mkdir(exist_ok=True)
     gz_path = resources_dir / "gencode.v44.basic.annotation.gff3.gz"
@@ -237,7 +245,13 @@ def main() -> None:
     parser.add_argument("--plink", default=None)
     parser.add_argument("--gff3", default=None)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--offline", action="store_true",
+                        help="strict offline mode: no downloads, no online lookups, no cloud AI model")
     args, extra = parser.parse_known_args()
+    global OFFLINE
+    OFFLINE = args.offline
+    if OFFLINE:
+        extra = ["--offline"] + extra
 
     require_java()
     workspace = Path(args.workspace).expanduser().resolve()

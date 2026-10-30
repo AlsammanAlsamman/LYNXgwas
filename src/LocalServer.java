@@ -4410,6 +4410,7 @@ public class LocalServer {
     }
 
     private String shortGet(String url) throws IOException, InterruptedException {
+        netguard.OfflineMode.check(url);   // strict offline mode: nothing leaves the computer
         java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofMillis(700)).build();
         java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(URI.create(url))

@@ -353,6 +353,7 @@ public class ExampleDataInstaller {
     private static HttpURLConnection open(String url, long from, String accept) throws IOException {
         String u = url;
         for (int hop = 0; hop < 6; hop++) {
+            netguard.OfflineMode.check(u);   // strict offline mode: nothing leaves the computer
             HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
             c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(20_000);

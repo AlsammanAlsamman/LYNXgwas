@@ -35,6 +35,8 @@ javac -encoding UTF-8 -d bin -cp "bin%LIBCP%" ^
   tests\RegionConstellationBuilderTest.java ^
   tests\SerpentPlotBuilderTest.java ^
   tests\MhcRegionTest.java ^
+  tests\DirectionCheckTest.java ^
+  tests\OfflineModeTest.java ^
   tests\ToolLocatorTest.java ^
   tests\PlinkRunnerTest.java ^
   tests\LdscRegressionTest.java ^
@@ -174,6 +176,16 @@ if %ERRORLEVEL% neq 0 set FAILED=1
 echo.
 echo --- MhcRegionTest ---
 java -cp "bin%LIBCP%" MhcRegionTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+
+echo.
+echo --- DirectionCheckTest ---
+java -cp "bin%LIBCP%" DirectionCheckTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+
+echo.
+echo --- OfflineModeTest ---
+java -cp "bin%LIBCP%" OfflineModeTest src
 if %ERRORLEVEL% neq 0 set FAILED=1
 
 echo.
