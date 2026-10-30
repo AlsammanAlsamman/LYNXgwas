@@ -34,6 +34,7 @@ javac -encoding UTF-8 -d bin -cp "bin%LIBCP%" ^
   tests\GeneConstellationBuilderTest.java ^
   tests\RegionConstellationBuilderTest.java ^
   tests\SerpentPlotBuilderTest.java ^
+  tests\MhcRegionTest.java ^
   tests\ToolLocatorTest.java ^
   tests\PlinkRunnerTest.java ^
   tests\LdscRegressionTest.java ^
@@ -168,6 +169,11 @@ if %ERRORLEVEL% neq 0 set FAILED=1
 echo.
 echo --- SerpentPlotBuilderTest ---
 java -cp "bin%LIBCP%" SerpentPlotBuilderTest
+if %ERRORLEVEL% neq 0 set FAILED=1
+
+echo.
+echo --- MhcRegionTest ---
+java -cp "bin%LIBCP%" MhcRegionTest
 if %ERRORLEVEL% neq 0 set FAILED=1
 
 echo.
