@@ -165,6 +165,15 @@ public class AgentToolRegistry {
             merged.put(CONFIG_KEYS.getOrDefault(e.getKey(), e.getKey()), e.getValue());
         }
 
+        // A new project with no annotation given gets the GENCODE annotation installed in resources/ for its build
+        // (the example-data installer puts the GRCh37 one there); otherwise it would point at a file that is absent.
+        if (isNew && merged.get("gff3.file") == null) {
+            String build = String.valueOf(merged.getOrDefault("genome.build", "GRCh37"));
+            File gff = new File("resources", build.toUpperCase().contains("38")
+                ? "gencode.v37.annotation.gff3" : "gencode.v37lift37.annotation.gff3");
+            if (gff.isFile()) merged.put("gff3.file", gff.getAbsolutePath().replace('\\', '/'));
+        }
+
         String body = encodeFlatObject(merged);
         HttpResp r = post("/api/project/" + enc(projectId) + "/config", body);
         int changed = args.size() - 1;

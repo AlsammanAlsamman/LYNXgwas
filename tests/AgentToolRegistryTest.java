@@ -61,6 +61,9 @@ public class AgentToolRegistryTest {
             String postedNew = capturedBodies.get("POST /api/project/brandnew/config");
             failures += check("brandnew POST body contains gwas.file",
                 postedNew != null && postedNew.contains("input/new.tsv"));
+            if (new File("resources", "gencode.v37lift37.annotation.gff3").isFile())
+                failures += check("a new project without gff3.file gets the installed GRCh37 annotation",
+                    postedNew != null && postedNew.contains("gencode.v37lift37.annotation.gff3"));
             failures += check("brandnew POST body contains threads",
                 postedNew != null && postedNew.contains("\"threads\":\"8\""));
 
