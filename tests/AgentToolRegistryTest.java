@@ -60,6 +60,19 @@ public class AgentToolRegistryTest {
             failures += check("brandnew POST body contains threads",
                 postedNew != null && postedNew.contains("\"threads\":\"8\""));
 
+            // ── create_or_update_project: underscored field names, as the schema publishes them ──
+            failures += check("schema publishes config keys with underscores",
+                MiniJson.encode(registry.toolSchemas()).contains("\"gwas_file\"")
+                && !MiniJson.encode(registry.toolSchemas()).contains("\"gwas.file\""));
+            callArgs = new LinkedHashMap<>();
+            callArgs.put("project_id", "underscored");
+            callArgs.put("gwas_file", "input/u.tsv");
+            callArgs.put("col_pvalue", "PVAL");
+            r = registry.dispatch("create_or_update_project", callArgs);
+            String postedU = capturedBodies.get("POST /api/project/underscored/config");
+            failures += check("underscored names are written as config keys",
+                postedU != null && postedU.contains("\"gwas.file\":\"input/u.tsv\"") && postedU.contains("\"col.pvalue\":\"PVAL\""));
+
             // ── create_or_update_project: EXISTING project, changing only one field ──
             // "existing" fake-backend config has gwas.file=input/x.tsv, col.chr=chrom, threads=4,
             // ld.enabled=false. We change only threads. The other three fields MUST survive in the

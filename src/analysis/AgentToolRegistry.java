@@ -52,8 +52,8 @@ public class AgentToolRegistry {
         tools.add(fn("create_or_update_project",
             "Create a new project, or change one or more settings of an existing one. Only include the fields you " +
             "want to set; anything you omit keeps its current value on an existing project, or the sensible default " +
-            "on a new one. Field names match LYNXgwas's own config.properties keys exactly (e.g. 'gwas.file', " +
-            "'col.chr', 'ref.panel.path', 'ld.enabled').",
+            "on a new one. Field names are LYNXgwas's own config.properties keys with each dot written as an underscore " +
+            "(e.g. 'gwas_file' for gwas.file, 'col_chr', 'ref_panel_path', 'ld_enabled').",
             paramsMap(reqStr("project_id", "The project's id (folder name); created if it doesn't exist yet."),
                 optStr("gwas.file", "Path to the raw GWAS summary-statistics file."),
                 optStr("loci.file", "Path to a pre-defined loci list, if not using automatic clumping."),
@@ -162,7 +162,7 @@ public class AgentToolRegistry {
         }
         for (Map.Entry<String, Object> e : args.entrySet()) {
             if (e.getKey().equals("project_id")) continue;
-            merged.put(e.getKey(), e.getValue());
+            merged.put(CONFIG_KEYS.getOrDefault(e.getKey(), e.getKey()), e.getValue());
         }
 
         String body = encodeFlatObject(merged);
@@ -310,7 +310,21 @@ public class AgentToolRegistry {
     }
 
     private static Map<String, Object> params(P... ps) { return paramsMixed(ps); }
-    private static Map<String, Object> paramsMap(P... ps) { return paramsMixed(ps); }
+    // Config keys contain dots ('gwas.file'), which some local models cannot emit as tool-argument names: gemma4
+    // through Ollama reasons out the call and then returns no tool call at all. The schema therefore publishes them
+    // with underscores ('gwas_file'), and createOrUpdateProject maps both spellings back to the config key.
+    private static final Map<String, String> CONFIG_KEYS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static Map<String, Object> paramsMap(P... ps) {
+        for (P p : ps) {
+            if (p.name.indexOf('.') >= 0) {
+                String alias = p.name.replace('.', '_');
+                CONFIG_KEYS.put(alias, p.name);
+                p.name = alias;
+            }
+        }
+        return paramsMixed(ps);
+    }
 
     private static Map<String, Object> paramsMixed(P... ps) {
         Map<String, Object> properties = new LinkedHashMap<>();
