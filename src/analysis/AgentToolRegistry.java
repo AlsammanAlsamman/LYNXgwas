@@ -175,6 +175,30 @@ public class AgentToolRegistry {
 
     private ToolExecutionResult runPipeline(String projectId) throws IOException, InterruptedException {
         requireStr(projectId, "project_id");
+        // A project created through the agent has no loci file yet (the wizard's loci step makes it), and the
+        // pipeline cannot start without one: identify the loci first with the default thresholds, then start the
+        // pipeline in the background once that finishes.
+        if (!hasLociFile(projectId)) {
+            HttpResp li = post("/api/loci-identify", "{\"project_id\":" + jsonStr(projectId) + "}");
+            if (!li.ok) return new ToolExecutionResult(false, li.body,
+                "Could not start loci identification for '" + projectId + "': " + li.body);
+            Thread t = new Thread(() -> {
+                try {
+                    for (int i = 0; i < 2 * 3600; i++) {
+                        HttpResp lp = get("/api/loci-progress?project=" + enc(projectId));
+                        if (lp.ok && lp.body.contains("\"done\":true")) {
+                            if (lp.body.contains("\"error\":null")) post("/api/projects/process", "{\"id\":" + jsonStr(projectId) + "}");
+                            return;
+                        }
+                        Thread.sleep(1000);
+                    }
+                } catch (Exception ignored) { }
+            }, "agent-pipeline-" + projectId);
+            t.setDaemon(true);
+            t.start();
+            return new ToolExecutionResult(true, "{\"started\":true,\"phase\":\"identifying loci\"}",
+                "Started loci identification for '" + projectId + "'; the pipeline starts when it finishes.");
+        }
         HttpResp r = post("/api/projects/process", "{\"id\":" + jsonStr(projectId) + "}");
         return new ToolExecutionResult(r.ok, r.body,
             r.ok ? "Started pipeline processing for '" + projectId + "'."
@@ -183,6 +207,10 @@ public class AgentToolRegistry {
 
     private ToolExecutionResult getPipelineProgress(String projectId) throws IOException, InterruptedException {
         requireStr(projectId, "project_id");
+        if (!hasLociFile(projectId)) {
+            HttpResp lp = get("/api/loci-progress?project=" + enc(projectId));
+            return new ToolExecutionResult(lp.ok, lp.body, "Checked loci identification for '" + projectId + "'.");
+        }
         HttpResp r = get("/api/project/" + enc(projectId) + "/progress");
         return new ToolExecutionResult(r.ok, r.body, "Checked pipeline progress for '" + projectId + "'.");
     }
@@ -219,6 +247,15 @@ public class AgentToolRegistry {
     }
 
     // ── Loop-back HTTP plumbing ──
+
+    private boolean hasLociFile(String projectId) throws IOException, InterruptedException {
+        HttpResp c = get("/api/project/" + enc(projectId) + "/config");
+        if (!c.ok) return false;
+        Object f = MiniJson.asObject(MiniJson.parse(c.body)).get("loci.file");
+        if (f == null || f.toString().trim().isEmpty()) return false;
+        String path = f.toString().trim();
+        return new File(path).isFile() || new File("projects/" + projectId, path).isFile();
+    }
 
     private static class HttpResp {
         final boolean ok;

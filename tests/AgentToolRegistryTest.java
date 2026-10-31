@@ -19,8 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AgentToolRegistryTest {
 
     private static final Map<String, String> capturedBodies = new ConcurrentHashMap<>();
+    private static String lociPath;
 
     public static void main(String[] progArgs) throws Exception {
+        File loci = File.createTempFile("agent_loci", ".txt");
+        loci.deleteOnExit();
+        lociPath = loci.getAbsolutePath().replace('\\', '/');
         int failures = 0;
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         int port = server.getAddress().getPort();
@@ -103,6 +107,17 @@ public class AgentToolRegistryTest {
             failures += check("run_pipeline posted the right project id",
                 processBody != null && processBody.contains("\"id\":\"existing\""));
 
+            // ── run_pipeline on a project without a loci file: identify loci first, then start the pipeline ──
+            capturedBodies.remove("POST /api/projects/process");
+            callArgs.put("project_id", "noloci");
+            r = registry.dispatch("run_pipeline", callArgs);
+            failures += check("run_pipeline(noloci) starts loci identification",
+                r.ok && String.valueOf(capturedBodies.get("POST /api/loci-identify")).contains("\"project_id\":\"noloci\""));
+            for (int i = 0; i < 50 && capturedBodies.get("POST /api/projects/process") == null; i++) Thread.sleep(100);
+            failures += check("run_pipeline(noloci) starts the pipeline once the loci are identified",
+                String.valueOf(capturedBodies.get("POST /api/projects/process")).contains("\"id\":\"noloci\""));
+            callArgs.put("project_id", "existing");
+
             // ── get_pipeline_progress ──
             r = registry.dispatch("get_pipeline_progress", callArgs);
             failures += check("get_pipeline_progress ok", r.ok);
@@ -170,11 +185,19 @@ public class AgentToolRegistryTest {
             capturedBodies.put("POST /api/projects/process", body);
             respond(ex, 200, "{\"processing\":1}");
         });
+        server.createContext("/api/loci-identify", ex -> {
+            capturedBodies.put("POST /api/loci-identify", readBody(ex));
+            respond(ex, 200, "{\"started\":true}");
+        });
+        server.createContext("/api/loci-progress", ex -> respond(ex, 200, "{\"pct\":100,\"done\":true,\"error\":null}"));
         server.createContext("/api/project/", ex -> {
             String path = ex.getRequestURI().getPath();
             String method = ex.getRequestMethod();
             if (path.equals("/api/project/existing/config") && method.equals("GET")) {
-                respond(ex, 200, "{\"gwas.file\":\"input/x.tsv\",\"col.chr\":\"chrom\",\"threads\":4,\"ld.enabled\":false}");
+                respond(ex, 200, "{\"gwas.file\":\"input/x.tsv\",\"col.chr\":\"chrom\",\"threads\":4,\"ld.enabled\":false,"
+                    + "\"loci.file\":\"" + lociPath + "\"}");
+            } else if (path.equals("/api/project/noloci/config") && method.equals("GET")) {
+                respond(ex, 200, "{\"gwas.file\":\"input/x.tsv\",\"loci.file\":\"input/loci.txt\"}");
             } else if (path.equals("/api/project/brandnew/config") && method.equals("GET")) {
                 respond(ex, 404, "{\"error\":\"No config.properties\"}");
             } else if (path.endsWith("/config") && method.equals("POST")) {
