@@ -64,6 +64,8 @@ public class AgentToolRegistryTest {
             if (new File("resources", "gencode.v37lift37.annotation.gff3").isFile())
                 failures += check("a new project without gff3.file gets the installed GRCh37 annotation",
                     postedNew != null && postedNew.contains("gencode.v37lift37.annotation.gff3"));
+            failures += check("a new project leaves col.varid unmapped unless it is given",
+                postedNew != null && postedNew.contains("\"col.varid\":\"\""));
             failures += check("brandnew POST body contains threads",
                 postedNew != null && postedNew.contains("\"threads\":\"8\""));
 
@@ -79,6 +81,14 @@ public class AgentToolRegistryTest {
             String postedU = capturedBodies.get("POST /api/project/underscored/config");
             failures += check("underscored names are written as config keys",
                 postedU != null && postedU.contains("\"gwas.file\":\"input/u.tsv\"") && postedU.contains("\"col.pvalue\":\"PVAL\""));
+
+            callArgs = new LinkedHashMap<>();
+            callArgs.put("project_id", "cc");
+            callArgs.put("n_cases", "400");
+            callArgs.put("n_controls", "600");
+            registry.dispatch("create_or_update_project", callArgs);
+            failures += check("cases and controls without sample.n give sample.n as their sum",
+                String.valueOf(capturedBodies.get("POST /api/project/cc/config")).contains("\"sample.n\":\"1000\""));
 
             // ── create_or_update_project: EXISTING project, changing only one field ──
             // "existing" fake-backend config has gwas.file=input/x.tsv, col.chr=chrom, threads=4,
@@ -138,8 +148,15 @@ public class AgentToolRegistryTest {
             r = registry.dispatch("run_analysis_tool", callArgs);
             failures += check("run_analysis_tool ok", r.ok);
             String analysisBody = capturedBodies.get("POST /api/project/existing/analysis/run");
-            failures += check("run_analysis_tool posted tool=susie",
-                analysisBody != null && analysisBody.contains("\"tool\":\"susie\""));
+            failures += check("run_analysis_tool maps the name 'susie' to the tool id",
+                analysisBody != null && analysisBody.contains("\"tool\":\"susie_finemapping\""));
+            callArgs.put("tool", "SuSiE fine-mapping");
+            registry.dispatch("run_analysis_tool", callArgs);
+            failures += check("run_analysis_tool maps the label 'SuSiE fine-mapping' to the tool id",
+                String.valueOf(capturedBodies.get("POST /api/project/existing/analysis/run")).contains("\"tool\":\"susie_finemapping\""));
+            callArgs.put("tool", "susie");
+            failures += check("run_analysis_tool maps locus number 1 to the locus id",
+                analysisBody != null && analysisBody.contains("\"locus_id\":\"2d9b-uuid\""));
             failures += check("run_analysis_tool did not post project_id in the body (only in the path)",
                 analysisBody != null && !analysisBody.contains("project_id"));
 
@@ -210,13 +227,14 @@ public class AgentToolRegistryTest {
             } else if (path.equals("/api/project/existing/progress") && method.equals("GET")) {
                 respond(ex, 200, "{\"pct\":50,\"done\":false}");
             } else if (path.equals("/api/project/_agent/analysis/tools") && method.equals("GET")) {
-                respond(ex, 200, "[{\"name\":\"susie\"},{\"name\":\"coloc\"}]");
+                respond(ex, 200, "[{\"tool\":\"susie_finemapping\",\"label\":\"SuSiE Fine-Mapping\"},"
+                    + "{\"tool\":\"coloc\",\"label\":\"Colocalisation (coloc)\"}]");
             } else if (path.equals("/api/project/existing/analysis/run") && method.equals("POST")) {
                 String body = readBody(ex);
                 capturedBodies.put("POST " + path, body);
                 respond(ex, 200, "{\"job_id\":\"abc123\"}");
             } else if (path.equals("/api/project/existing/manifest") && method.equals("GET")) {
-                respond(ex, 200, "{\"loci\":[]}");
+                respond(ex, 200, "{\"loci\":[{\"id\":\"2d9b-uuid\",\"index\":1,\"locus_name\":\"Locus 1\"}]}");
             } else {
                 respond(ex, 404, "{\"error\":\"no fake route for " + path + "\"}");
             }

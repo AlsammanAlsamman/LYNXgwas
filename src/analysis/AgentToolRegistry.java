@@ -174,6 +174,19 @@ public class AgentToolRegistry {
             if (gff.isFile()) merged.put("gff3.file", gff.getAbsolutePath().replace('\\', '/'));
         }
 
+        // Config's default variant-id column ('varid') is checked against the file header, so a new project whose
+        // file has no such column would fail; leave it unmapped unless the model set it.
+        if (isNew && merged.get("col.varid") == null) merged.put("col.varid", "");
+
+        // The wizard asks for the total N separately; a model given only cases and controls leaves sample.n at 0, and
+        // SuSiE then refuses to run. Use their sum.
+        try {
+            String sn = String.valueOf(merged.getOrDefault("sample.n", "0")).trim();
+            if ((sn.isEmpty() || Double.parseDouble(sn) == 0) && merged.get("n.cases") != null && merged.get("n.controls") != null)
+                merged.put("sample.n", String.valueOf(Math.round(Double.parseDouble(String.valueOf(merged.get("n.cases")))
+                    + Double.parseDouble(String.valueOf(merged.get("n.controls"))))));
+        } catch (NumberFormatException ignored) { }
+
         String body = encodeFlatObject(merged);
         HttpResp r = post("/api/project/" + enc(projectId) + "/config", body);
         int changed = args.size() - 1;
@@ -241,10 +254,56 @@ public class AgentToolRegistry {
 
         Map<String, Object> body = new LinkedHashMap<>(args);
         body.remove("project_id");
+        body.put("locus_id", resolveLocusId(projectId, locusId));
+        body.put("tool", resolveToolId(tool));
         HttpResp r = post("/api/project/" + enc(projectId) + "/analysis/run", encodeFlatObject(body));
         return new ToolExecutionResult(r.ok, r.body,
             r.ok ? "Started '" + tool + "' on locus '" + locusId + "' for project '" + projectId + "'."
                  : "Could not start '" + tool + "': " + r.body);
+    }
+
+    /** Models often name a tool by its label ("SuSiE", "SuSiE fine-mapping"): map that to the tool's id when only one
+     *  tool matches. */
+    @SuppressWarnings("unchecked")
+    private String resolveToolId(String tool) throws IOException, InterruptedException {
+        HttpResp r = get("/api/project/_agent/analysis/tools");
+        if (!r.ok) return tool;
+        Object parsed = MiniJson.parse(r.body);
+        if (!(parsed instanceof List)) return tool;
+        String want = tool.toLowerCase().replaceAll("[^a-z0-9]", "");
+        List<String> hits = new ArrayList<>();
+        for (Object o : (List<Object>) parsed) {
+            Map<String, Object> t = MiniJson.asObject(o);
+            String id = String.valueOf(t.get("tool"));
+            if (id.equals(tool)) return tool;
+            String idN = id.toLowerCase().replaceAll("[^a-z0-9]", "");
+            String label = String.valueOf(t.get("label")).toLowerCase().replaceAll("[^a-z0-9]", "");
+            if (!want.isEmpty() && (idN.equals(want) || label.startsWith(want) || id.toLowerCase().split("_")[0].equals(want)))
+                hits.add(id);
+        }
+        return hits.size() == 1 ? hits.get(0) : tool;
+    }
+
+    /** Locus ids are UUIDs, but users (and models) say "locus 1": map a locus number or name to its id. */
+    @SuppressWarnings("unchecked")
+    private String resolveLocusId(String projectId, String locusId) throws IOException, InterruptedException {
+        HttpResp m = get("/api/project/" + enc(projectId) + "/manifest");
+        if (!m.ok) return locusId;
+        String want = locusId.trim().replaceFirst("(?i)^locus\\s*", "");
+        Object loci = MiniJson.asObject(MiniJson.parse(m.body)).get("loci");
+        if (!(loci instanceof List)) return locusId;
+        for (Object o : (List<Object>) loci) {
+            Map<String, Object> l = MiniJson.asObject(o);
+            if (locusId.equals(String.valueOf(l.get("id")))) return locusId;
+        }
+        for (Object o : (List<Object>) loci) {
+            Map<String, Object> l = MiniJson.asObject(o);
+            Object idx = l.get("index");
+            String index = idx instanceof Number ? String.valueOf(((Number) idx).longValue()) : String.valueOf(idx);
+            if (want.equals(index) || locusId.equalsIgnoreCase(String.valueOf(l.get("locus_name"))))
+                return String.valueOf(l.get("id"));
+        }
+        return locusId;
     }
 
     private ToolExecutionResult getProjectManifest(String projectId) throws IOException, InterruptedException {
