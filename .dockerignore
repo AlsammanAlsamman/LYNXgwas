@@ -1,0 +1,12 @@
+projects/
+projects_archive/
+output/
+dist/
+launch/video/shots/
+data_we_use/
+refpanels/
+*.log
+.git/
+brainny-out/
+graphify-out/
+prototypes/

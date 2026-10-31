@@ -22,6 +22,13 @@ public class LocalServer {
         catch (NumberFormatException e) { return 8765; }
     }
 
+    /** localhost, unless -Dlynxgwas.bind or LYNXGWAS_BIND says otherwise. Only the container image sets it (to
+     *  0.0.0.0, published on the host's loopback), because Docker cannot forward a port to a loopback-bound server. */
+    static String configuredBind() {
+        String v = System.getProperty("lynxgwas.bind", System.getenv("LYNXGWAS_BIND"));
+        return v == null || v.trim().isEmpty() ? "localhost" : v.trim();
+    }
+
     /** Global progress — used by legacy single-project mode. */
     public static final ProgressTracker progress = new ProgressTracker();
 
@@ -233,7 +240,7 @@ public class LocalServer {
         this.lastFolder = outputDir + "/plots";
         new File(this.lastFolder).mkdirs();
 
-        http = HttpServer.create(new InetSocketAddress("localhost", PORT), 32);
+        http = HttpServer.create(new InetSocketAddress(configuredBind(), PORT), 32);
         loadPersistedLocusMatrixJobs();
 
         // ── Example data (the article's 30 datasets, from Zenodo) ────────

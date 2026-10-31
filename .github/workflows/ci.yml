@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build
+        run: sh build.sh
+
+      - name: Tests, with coverage
+        env:
+          JACOCO: "0.8.12"
+        run: |
+          mkdir -p coverage
+          curl -fsSL -o coverage/agent.jar "https://repo1.maven.org/maven2/org/jacoco/org.jacoco.agent/$JACOCO/org.jacoco.agent-$JACOCO-runtime.jar"
+          curl -fsSL -o coverage/cli.jar "https://repo1.maven.org/maven2/org/jacoco/org.jacoco.cli/$JACOCO/org.jacoco.cli-$JACOCO-nodeps.jar"
+          # every test JVM started by run_tests.sh appends to the same coverage file
+          JAVA_TOOL_OPTIONS="-javaagent:$PWD/coverage/agent.jar=destfile=$PWD/coverage/jacoco.exec,append=true" sh run_tests.sh
+
+      - name: Coverage report
+        if: always()
+        run: |
+          java -jar coverage/cli.jar report coverage/jacoco.exec --classfiles bin --sourcefiles src \
+               --csv coverage/coverage.csv --html coverage/html
+          awk -F, 'NR>1 {m+=$8; c+=$9} END {printf "Line coverage: %.1f%% (%d of %d lines)\n", 100*c/(m+c), c, m+c}' \
+               coverage/coverage.csv | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/html
+
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Launcher compiles
+        run: |
+          python -m py_compile python/lynxgwas/*.py
+          python -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('python').rglob('*.py')]"
