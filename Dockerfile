@@ -11,15 +11,16 @@
 #   mvsusieR 0.3.0 (stephenslab/mvsusieR@8edc67a), kept apart because mvsusieR needs susieR >= 0.15.54
 #   PLINK 1.9.0-b.7.11 (19 Aug 2025); GCTA 1.94.1; MAGMA 1.10; GWAMA 2.2.2; Java 17
 #
-# NOT YET BUILT: written without Docker available. Check the four binary download URLs below on the first build;
-# they are the publishers' links at the time of writing.
+# The image has not been built yet (no Docker on the machine it was written on). The four download URLs below were
+# checked on 2 November 2026: each returns the expected archive or binary (MAGMA: the Linux v1.10 build). GCTA comes
+# from its GitHub release, because the publisher's site serves a JavaScript check instead of the file.
 
 FROM rocker/r-ver:4.6.1
 
 ARG PLINK_URL=https://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20250819.zip
-ARG GCTA_URL=https://yanglab.westlake.edu.cn/software/gcta/bin/gcta-1.94.1-linux-kernel-3-x86_64.zip
+ARG GCTA_URL=https://github.com/jianyangqt/gcta/releases/download/v1.94.1/gcta-1.94.1-linux-x86_64-static
 ARG MAGMA_URL=https://vu.data.surfsara.nl/index.php/s/zkKbNeNOZAhFXZB/download
-ARG GWAMA_URL=https://genomics.ut.ee/sites/default/files/GWAMA_v2.2.2.zip
+ARG GWAMA_URL=https://www.geenivaramu.ee/tools/GWAMA_v2.2.2.zip
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openjdk-17-jdk-headless unzip curl ca-certificates build-essential zlib1g-dev \
@@ -29,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── external programs, on PATH (ToolLocator looks in bin/ first, then PATH) ──
 RUN mkdir -p /opt/tools /tmp/dl && cd /tmp/dl \
     && curl -fsSL -o plink.zip "$PLINK_URL" && unzip -q plink.zip plink -d /opt/tools \
-    && curl -fsSL -o gcta.zip "$GCTA_URL" && unzip -q gcta.zip && find . -name gcta64 -type f -exec cp {} /opt/tools/ \; \
+    && curl -fsSL -o /opt/tools/gcta64 "$GCTA_URL" \
     && curl -fsSL -o magma.zip "$MAGMA_URL" && unzip -q magma.zip && find . -name magma -type f -exec cp {} /opt/tools/ \; \
     && curl -fsSL -o gwama.zip "$GWAMA_URL" && unzip -q gwama.zip -d gwama && make -C "$(dirname "$(find gwama -name Makefile | head -1)")" \
     && find gwama -name GWAMA -type f -exec cp {} /opt/tools/ \; \
