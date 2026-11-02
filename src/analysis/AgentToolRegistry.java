@@ -256,6 +256,33 @@ public class AgentToolRegistry {
         body.remove("project_id");
         body.put("locus_id", resolveLocusId(projectId, locusId));
         body.put("tool", resolveToolId(tool));
+        // An analysis reads the locus inputs (harmonized statistics, LD) that the interface builds first; when they are
+        // missing, build them and start the analysis in the background once that finishes.
+        String resolvedLocus = String.valueOf(body.get("locus_id"));
+        File harmonized = new File(new File(new File("projects/" + projectId, "loci_analysis"), resolvedLocus),
+            "harmonized/harmonized_gwas.tsv");
+        if (!harmonized.isFile()) {
+            HttpResp b = post("/api/project/" + enc(projectId) + "/analysis/build-base",
+                "{\"locus_id\":" + jsonStr(resolvedLocus) + "}");
+            if (!b.ok) return new ToolExecutionResult(false, b.body, "Could not build the inputs of locus '" + locusId + "': " + b.body);
+            final String runBody = encodeFlatObject(body);
+            Thread t = new Thread(() -> {
+                try {
+                    for (int i = 0; i < 2 * 3600; i++) {
+                        Thread.sleep(1000);
+                        HttpResp pr = get("/api/project/" + enc(projectId) + "/analysis/build-base-progress");
+                        if (pr.ok && pr.body.contains("\"done\":true")) {
+                            if (!pr.body.contains("Error")) post("/api/project/" + enc(projectId) + "/analysis/run", runBody);
+                            return;
+                        }
+                    }
+                } catch (Exception ignored) { }
+            }, "agent-analysis-" + projectId);
+            t.setDaemon(true);
+            t.start();
+            return new ToolExecutionResult(true, "{\"started\":true,\"phase\":\"building locus inputs\"}",
+                "Building the inputs of locus '" + locusId + "'; '" + tool + "' starts when they are ready.");
+        }
         HttpResp r = post("/api/project/" + enc(projectId) + "/analysis/run", encodeFlatObject(body));
         return new ToolExecutionResult(r.ok, r.body,
             r.ok ? "Started '" + tool + "' on locus '" + locusId + "' for project '" + projectId + "'."
@@ -269,6 +296,7 @@ public class AgentToolRegistry {
         HttpResp r = get("/api/project/_agent/analysis/tools");
         if (!r.ok) return tool;
         Object parsed = MiniJson.parse(r.body);
+        if (parsed instanceof Map) parsed = ((Map<String, Object>) parsed).get("tools");   // {"tools": [...]}
         if (!(parsed instanceof List)) return tool;
         String want = tool.toLowerCase().replaceAll("[^a-z0-9]", "");
         List<String> hits = new ArrayList<>();

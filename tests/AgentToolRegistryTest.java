@@ -147,13 +147,17 @@ public class AgentToolRegistryTest {
             callArgs.put("locus_id", "1");
             r = registry.dispatch("run_analysis_tool", callArgs);
             failures += check("run_analysis_tool ok", r.ok);
-            String analysisBody = capturedBodies.get("POST /api/project/existing/analysis/run");
+            // the locus has no inputs yet: they are built first and the analysis starts once that finishes
+            failures += check("run_analysis_tool builds the missing locus inputs first",
+                String.valueOf(capturedBodies.get("POST /api/project/existing/analysis/build-base")).contains("\"locus_id\":\"2d9b-uuid\""));
+            String analysisBody = waitForBody("POST /api/project/existing/analysis/run");
             failures += check("run_analysis_tool maps the name 'susie' to the tool id",
                 analysisBody != null && analysisBody.contains("\"tool\":\"susie_finemapping\""));
             callArgs.put("tool", "SuSiE fine-mapping");
+            capturedBodies.remove("POST /api/project/existing/analysis/run");
             registry.dispatch("run_analysis_tool", callArgs);
             failures += check("run_analysis_tool maps the label 'SuSiE fine-mapping' to the tool id",
-                String.valueOf(capturedBodies.get("POST /api/project/existing/analysis/run")).contains("\"tool\":\"susie_finemapping\""));
+                String.valueOf(waitForBody("POST /api/project/existing/analysis/run")).contains("\"tool\":\"susie_finemapping\""));
             callArgs.put("tool", "susie");
             failures += check("run_analysis_tool maps locus number 1 to the locus id",
                 analysisBody != null && analysisBody.contains("\"locus_id\":\"2d9b-uuid\""));
@@ -227,8 +231,13 @@ public class AgentToolRegistryTest {
             } else if (path.equals("/api/project/existing/progress") && method.equals("GET")) {
                 respond(ex, 200, "{\"pct\":50,\"done\":false}");
             } else if (path.equals("/api/project/_agent/analysis/tools") && method.equals("GET")) {
-                respond(ex, 200, "[{\"tool\":\"susie_finemapping\",\"label\":\"SuSiE Fine-Mapping\"},"
-                    + "{\"tool\":\"coloc\",\"label\":\"Colocalisation (coloc)\"}]");
+                respond(ex, 200, "{\"tools\":[{\"tool\":\"susie_finemapping\",\"label\":\"SuSiE Fine-Mapping\"},"
+                    + "{\"tool\":\"coloc\",\"label\":\"Colocalisation (coloc)\"}]}");   // the real endpoint's shape
+            } else if (path.equals("/api/project/existing/analysis/build-base") && method.equals("POST")) {
+                capturedBodies.put("POST " + path, readBody(ex));
+                respond(ex, 202, "{\"status\":\"started\"}");
+            } else if (path.equals("/api/project/existing/analysis/build-base-progress") && method.equals("GET")) {
+                respond(ex, 200, "{\"phase\":\"Complete\",\"pct\":100,\"done\":true,\"completed_loci\":[]}");
             } else if (path.equals("/api/project/existing/analysis/run") && method.equals("POST")) {
                 String body = readBody(ex);
                 capturedBodies.put("POST " + path, body);
@@ -239,6 +248,11 @@ public class AgentToolRegistryTest {
                 respond(ex, 404, "{\"error\":\"no fake route for " + path + "\"}");
             }
         });
+    }
+
+    private static String waitForBody(String key) throws InterruptedException {
+        for (int i = 0; i < 50 && capturedBodies.get(key) == null; i++) Thread.sleep(100);
+        return capturedBodies.get(key);
     }
 
     private static String readBody(HttpExchange ex) throws IOException {
