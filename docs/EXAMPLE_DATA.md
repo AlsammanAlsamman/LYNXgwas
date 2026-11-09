@@ -79,6 +79,12 @@ python scripts/export_example_data.py \
 ```
 
 It gave `lynxgwas-example-data-v1.zip`: 803 MB, 3.25 GB unpacked, 112,042 files, 30 projects (rebuilt on 9 Oct 2026 with the corrected LD triangles).
+Version 2 (9 Nov 2026) is the same command on the rebuilt corpus (PLINK clumping in all 30 datasets) with
+`--jobs be21b910-736f-4a76-a9c4-5eba3592b68c` only (one run gives both the Serpent Plot and the Gene Constellation)
+and `--version 2`: `lynxgwas-example-data-v2.zip`, 788 MB, 3.25 GB unpacked, 112,191 files, 30 projects, 742 joint
+fine-mapping runs. The export now leaves out `heritability/*.sumstats.gz` (the munged GWAS, derived from the summary
+statistics). Version 1 has the loci of 10 datasets defined without clumping and must not be published.
+
 Publish a new pack as a new version of the same Zenodo record; the app always takes the latest.
 
 To test without Zenodo, serve the zip locally and point a workspace's `config/example_data.json` at it

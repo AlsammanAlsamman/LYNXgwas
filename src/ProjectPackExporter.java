@@ -18,6 +18,19 @@ import java.util.zip.*;
 public class ProjectPackExporter {
 
     static final File OUT_DIR = new File("exports");
+    /** Text files larger than this are copied without looking for paths to replace. */
+    static final long REWRITE_MAX_BYTES = 50_000_000L;
+    /** Where this exporter writes (the workspace's exports/ by default; a per-user folder on the server). */
+    private final File outDir;
+    /** Which cross-dataset runs (their job.json as a map) may travel; the server passes the caller's own. */
+    private final java.util.function.Predicate<Map<String, Object>> runFilter;
+
+    public ProjectPackExporter() { this(OUT_DIR, m -> true); }
+
+    public ProjectPackExporter(File outDir, java.util.function.Predicate<Map<String, Object>> runFilter) {
+        this.outDir = outDir;
+        this.runFilter = runFilter;
+    }
     static final Set<String> TEXT_EXT = new HashSet<>(Arrays.asList(
         "json", "properties", "tsv", "txt", "log", "r", "yaml", "yml", "js", "csv", "md", "key", "snps", "cojo", "master", "html"));
     static final java.util.regex.Pattern RUN_EXCLUDE = java.util.regex.Pattern.compile(
@@ -45,18 +58,30 @@ public class ProjectPackExporter {
         String j = p.toJson();
         return lastFile != null && p.done && p.error == null
             ? j.substring(0, j.length() - 1) + ",\"file\":\"" + ExampleDataInstaller.esc(lastFile) + "\",\"folder\":\""
-                + ExampleDataInstaller.esc(OUT_DIR.getAbsolutePath().replace('\\', '/')) + "\"}"
+                + ExampleDataInstaller.esc(outDir.getAbsolutePath().replace('\\', '/')) + "\"}"
             : j;
     }
 
     public void cancel() { ExampleDataInstaller.Progress p = job; if (p != null && !p.done) p.cancelled = true; }
 
     /** The finished export with this name, or null (names are checked, so nothing outside exports/ is served). */
-    public static File exported(String name) {
+    public static File exported(String name) { return exported(OUT_DIR, name); }
+
+    /** The finished export with this name in dir, or null (names are checked, so nothing else is served). */
+    public static File exported(File dir, String name) {
         if (name == null || !name.matches("lynxgwas-[A-Za-z0-9._-]+\\.zip")) return null;
-        File f = new File(OUT_DIR, name);
+        File f = new File(dir, name);
         return f.isFile() ? f : null;
     }
+
+    /** The finished export with this name in this exporter's folder, or null. */
+    public File file(String name) { return exported(outDir, name); }
+
+    /** The job's progress record (null before the first export), for callers that wait on it. */
+    public ExampleDataInstaller.Progress job() { return job; }
+
+    /** Name of the last finished export, or null. */
+    public String lastFile() { return lastFile; }
 
     public synchronized String start(List<String> ids, boolean includeGwas, boolean includeRuns) {
         if (job != null && !job.done) return "An export is already running.";
@@ -106,30 +131,30 @@ public class ProjectPackExporter {
                     if (g.getParent() != null) addRule(rules, g.getParent(), "@@LYNX_RESOURCES@@");
                 }
                 collectProject(new File("projects", id), "projects/" + id, files);
-                String eid = RegulatoryPeakIndex.resolveEid(id);
+                String eid = RegulatoryPeakIndex.resolveEid(id, cfg.diseaseName);
                 if (eid != null) eids.add(eid);
                 checkCancel(p);
             }
             rules.sort((a, b) -> b[0].length() - a[0].length());
 
             List<String> jobs = new ArrayList<>();
-            if (includeRuns) collectRuns(new HashSet<>(ids), files, jobs);
+            if (includeRuns) collectRuns(new HashSet<>(ids), files, jobs, runFilter);
             // the Roadmap histone peaks of the projects' tissues: regulatory tracks and enrichment need them
             for (String eid : eids)
                 if (eid.matches("E\\d+")) addTree(new File("regulatory_data", eid), "regulatory_data/" + eid, files, f -> true);
 
             long total = 0;
             for (File f : files.keySet()) total += f.length();
-            OUT_DIR.mkdirs();
+            outDir.mkdirs();
             String stamp = new SimpleDateFormat("yyyyMMdd-HHmm").format(new Date());
             String name = ids.size() == 1 ? "lynxgwas-project-" + ids.get(0) + "-" + stamp + ".zip"
                                           : "lynxgwas-projects-" + ids.size() + "-" + stamp + ".zip";
-            long free = OUT_DIR.getAbsoluteFile().getUsableSpace();
+            long free = outDir.getAbsoluteFile().getUsableSpace();
             if (free < total / 2 + 200_000_000L)
                 throw new IOException(String.format(Locale.ROOT, "Not enough disk space for the export: about %.1f GB needed, %.1f GB free.",
                     (total / 2 + 200_000_000L) / 1e9, free / 1e9));
 
-            part = new File(OUT_DIR, name + ".part");
+            part = new File(outDir, name + ".part");
             List<String> rewritten = new ArrayList<>();
             p.phase("Writing " + name, total);
             p.filesTotal = files.size();
@@ -141,7 +166,9 @@ public class ProjectPackExporter {
                     ZipEntry ze = new ZipEntry(arc);
                     ze.setTime(src.lastModified());
                     z.putNextEntry(ze);
-                    if (isText(arc)) {
+                    // summary statistics and other large tables hold no machine paths: streamed as they are
+                    // (rewriting a multi-GB file as one string stalled the export and could run out of memory)
+                    if (isText(arc) && !arc.matches("projects/[^/]+/input/.*") && src.length() < REWRITE_MAX_BYTES) {
                         String t = new String(Files.readAllBytes(src.toPath()), StandardCharsets.UTF_8);
                         for (String[] r : rules) if (t.contains(r[0])) t = t.replace(r[0], r[1]);
                         t = projectOverride(arc, t, ids, includeGwas);
@@ -183,7 +210,7 @@ public class ProjectPackExporter {
                 z.write(MiniJson.encode(pack).getBytes(StandardCharsets.UTF_8));
                 z.closeEntry();
             }
-            File out = new File(OUT_DIR, name);
+            File out = new File(outDir, name);
             Files.move(part.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING);
             lastFile = name;
             p.phase("Done", 0);
@@ -227,7 +254,8 @@ public class ProjectPackExporter {
     }
 
     /** Cross-dataset runs whose datasets are all exported, and their joint fine-mapping runs. */
-    private static void collectRuns(Set<String> ids, Map<File, String> out, List<String> jobs) {
+    private static void collectRuns(Set<String> ids, Map<File, String> out, List<String> jobs,
+                                    java.util.function.Predicate<Map<String, Object>> runFilter) {
         File[] dirs = new File("output/multi_locus").listFiles(File::isDirectory);
         if (dirs != null) for (File d : dirs) {
             File jf = new File(d, "job.json");
@@ -235,7 +263,7 @@ public class ProjectPackExporter {
             try {
                 Map<String, Object> m = MiniJson.asObject(MiniJson.parse(new String(Files.readAllBytes(jf.toPath()), StandardCharsets.UTF_8)));
                 List<Object> pids = m.get("project_ids") instanceof List ? MiniJson.asArray(m.get("project_ids")) : new ArrayList<>();
-                if (pids.isEmpty() || !"done".equals(MiniJson.getStr(m, "status", ""))) continue;
+                if (pids.isEmpty() || !"done".equals(MiniJson.getStr(m, "status", "")) || !runFilter.test(m)) continue;
                 boolean all = true;
                 for (Object o : pids) all &= ids.contains(String.valueOf(o));
                 if (!all) continue;

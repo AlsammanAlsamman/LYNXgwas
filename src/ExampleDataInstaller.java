@@ -120,6 +120,9 @@ public class ExampleDataInstaller {
 
     public String progressJson() { return job == null ? "{\"phase\":\"idle\",\"done\":true}" : job.toJson(); }
 
+    /** The current or last install's progress record, or null before the first one. */
+    public Progress job() { return job; }
+
     public void cancel() { Progress p = job; if (p != null && !p.done) p.cancelled = true; }
 
     public synchronized void setDismissed(boolean dismissed) throws IOException {
@@ -168,13 +171,7 @@ public class ExampleDataInstaller {
 
             Map<String, Object> pack;
             try (ZipFile zf = new ZipFile(zip)) {
-                ZipEntry pe = zf.getEntry("pack.json");
-                if (pe == null) throw new IOException("This file is not a LYNXgwas project pack (no pack.json).");
-                try (InputStream in = zf.getInputStream(pe)) {
-                    pack = MiniJson.asObject(MiniJson.parse(new String(readAll(in), StandardCharsets.UTF_8)));
-                }
-                if (!"1".equals(String.valueOf(num(pack.get("format")))))
-                    throw new IOException("This pack needs a newer LYNXgwas (pack format " + pack.get("format") + ").");
+                pack = readPack(zf);
                 if ("projects".equals(MiniJson.getStr(pack, "kind", ""))) p.kind = "import";
                 long unzipped = num(pack.get("uncompressed_bytes"));
                 checkSpace(unzipped + gffNeed() + 500_000_000L, "extracting the pack");
@@ -300,7 +297,7 @@ public class ExampleDataInstaller {
     // ── Download, verify, extract ───────────────────────────────────────────
 
     /** Downloads url into part, continuing an earlier partial download when the server allows it. */
-    private static void download(Progress p, String url, File part, long expected, String label) throws IOException {
+    static void download(Progress p, String url, File part, long expected, String label) throws IOException {
         long have = part.isFile() ? part.length() : 0;
         if (expected > 0 && have > expected) { part.delete(); have = 0; }
         p.phase(label, expected);
@@ -360,7 +357,8 @@ public class ExampleDataInstaller {
             c.setReadTimeout(120_000);
             c.setRequestProperty("User-Agent", "LYNXgwas/" + Config.PIPELINE_VERSION + " (example-data installer)");
             if (from > 0) c.setRequestProperty("Range", "bytes=" + from + "-");
-            if (accept != null) c.setRequestProperty("Accept", accept);
+            // Zenodo answers 406 to Java's default Accept header; files are asked for as anything
+            c.setRequestProperty("Accept", accept != null ? accept : "*/*");
             int code = c.getResponseCode();
             if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) {
                 u = new URL(new URL(u), c.getHeaderField("Location")).toString();
@@ -401,11 +399,37 @@ public class ExampleDataInstaller {
         }
     }
 
+    /** The pack's pack.json, checked to be a pack this version reads. */
+    static Map<String, Object> readPack(ZipFile zf) throws IOException {
+        ZipEntry pe = zf.getEntry("pack.json");
+        if (pe == null) throw new IOException("This file is not a LYNXgwas project pack (no pack.json).");
+        if (pe.getSize() > 50_000_000L) throw new IOException("The pack's pack.json is too large.");
+        Map<String, Object> pack;
+        try (InputStream in = zf.getInputStream(pe)) {
+            pack = MiniJson.asObject(MiniJson.parse(new String(readAll(in), StandardCharsets.UTF_8)));
+        }
+        if (!"1".equals(String.valueOf(num(pack.get("format")))))
+            throw new IOException("This pack needs a newer LYNXgwas (pack format " + pack.get("format") + ").");
+        return pack;
+    }
+
     /** Extracts into STAGING, refusing entries outside it or outside the pack's known folders. */
     private static void extract(Progress p, ZipFile zf, long declared) throws IOException {
         deleteUnder(STAGING);
-        Path root = STAGING.toPath().toAbsolutePath().normalize();
+        extractTo(p, zf, declared, STAGING.toPath());
+    }
+
+    /** Most entries a pack may hold (the 30-dataset article pack has far fewer). */
+    static final int MAX_ENTRIES = 1_000_000;
+
+    /**
+     * Extracts the pack into dest, refusing entries outside it or outside the pack's known folders, more
+     * entries than MAX_ENTRIES, and more bytes than the pack declares (zip bombs).
+     */
+    static void extractTo(Progress p, ZipFile zf, long declared, Path dest) throws IOException {
+        Path root = dest.toAbsolutePath().normalize();
         Files.createDirectories(root);
+        if (zf.size() > MAX_ENTRIES) throw new IOException("The pack holds too many files (" + zf.size() + ").");
         long limit = declared > 0 ? declared + declared / 10 + 50_000_000L : Long.MAX_VALUE, written = 0;
         p.phase("Unpacking", declared);
         p.filesTotal = zf.size();
@@ -436,12 +460,15 @@ public class ExampleDataInstaller {
     }
 
     /** Replaces the pack's path placeholders with this workspace's folders. */
-    private static void fillPaths(Progress p, List<Object> files) throws IOException {
+    private static void fillPaths(Progress p, List<Object> files) throws IOException { fillPaths(p, files, STAGING.toPath()); }
+
+    /** Replaces the placeholders in the listed files of a pack extracted to dest with this app's folders. */
+    static void fillPaths(Progress p, List<Object> files, Path dest) throws IOException {
         String ws = new File(".").getCanonicalPath().replace('\\', '/');
         String[][] map = {
             {"@@LYNX_WORKSPACE@@", ws}, {"@@LYNX_APP@@", ws}, {"@@LYNX_RESOURCES@@", ws + "/resources"},
             {"@@LYNX_REF_PANEL@@", ws + "/refpanels"}, {"@@LYNX_GWAS@@", ws + "/example-data/gwas"}};
-        Path root = STAGING.toPath().toAbsolutePath().normalize();
+        Path root = dest.toAbsolutePath().normalize();
         p.filesTotal = files.size();
         for (Object o : files) {
             Path f = root.resolve(String.valueOf(o)).normalize();

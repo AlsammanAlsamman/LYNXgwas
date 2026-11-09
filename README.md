@@ -100,9 +100,9 @@ your own GWAS summary statistics and walk through the setup wizard.
 To explore LYNXgwas before adding your own data, click **Download** on the home page's example-data
 banner (or **Example data** in the toolbar). It downloads the article's corpus from Zenodo (about
 800 MB; 3.3 GB on disk, plus the 1.7 GB GRCh37 gene annotation if you don't have it): 30 GWAS
-datasets across six diseases with every analysis already run, plus the cross-dataset Locus Serpent
-Plot and Gene Constellation runs. The download is checked and then added to your workspace, with a
-progress bar. Your own projects are never touched. The example projects include results only, not the
+datasets across six diseases with every analysis already run, plus the cross-dataset run over all 30
+(it opens as a Locus Serpent Plot and as a Gene Constellation). The download is checked and then added to
+your workspace, with a progress bar. Your own projects are never touched. The example projects include results only, not the
 original summary statistics, so they can be browsed but not re-run. See
 [docs/EXAMPLE_DATA.md](docs/EXAMPLE_DATA.md).
 

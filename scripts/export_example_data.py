@@ -52,6 +52,9 @@ PROJECT_TOP_SKIP_RE = re.compile(r"(\.bak|\.hg18|_done)$")
 # data/locus_<n>.js duplicate data/locus_<n>.json for opening the viewer straight from disk (file://);
 # the app serves the .json through its API, so the copies are left out
 DATA_EXCLUDE = re.compile(r"^locus_\d+\.js$")
+# heritability/ldsc_input.sumstats.gz is the munged GWAS (a z-score for every SNP): derived from the summary
+# statistics, which are not ours to redistribute; the result is ldsc.json
+HERITABILITY_EXCLUDE = re.compile(r"\.sumstats(\.gz)?$")
 
 
 def latest_runs(runs_dir: Path) -> list[Path]:
@@ -92,7 +95,9 @@ def select_files(ws: Path, jobs: list[str]) -> list[tuple[Path, str]]:
             if e.is_file():
                 out.append((e, f"{base}/{e.name}"))
             elif e.is_dir():
-                add_tree(e, f"{base}/{e.name}", keep=(lambda f: not DATA_EXCLUDE.match(f)) if e.name == "data" else (lambda f: True))
+                keep = {"data": lambda f: not DATA_EXCLUDE.match(f),
+                        "heritability": lambda f: not HERITABILITY_EXCLUDE.search(f)}.get(e.name, lambda f: True)
+                add_tree(e, f"{base}/{e.name}", keep=keep)
         for L in sorted((P / "loci_analysis").iterdir()):
             la = f"{base}/loci_analysis/{L.name}"
             if (L / "build.log").is_file():

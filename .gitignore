@@ -82,3 +82,6 @@ launch/video/render.log
 
 # Copied in by scripts/prepare_pypi_bundle.py from regulatory_links/ (kept once in git)
 python/lynxgwas/_bundled/regulatory_links/
+
+# Personal settings (reference panels, SNP databases): made from config/global.default.json on first use
+config/global.json
