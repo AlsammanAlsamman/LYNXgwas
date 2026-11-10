@@ -373,11 +373,8 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
     <button class="btn btn-secondary" onclick="openMissingRsids()">
       Missing rsIDs
     </button>
-    <button class="btn btn-secondary" onclick="openLocusMatrix()">
-      Gene Constellation
-    </button>
-    <button class="btn btn-secondary" onclick="openLocusMatrix('serpent')" title="Linear cross-dataset view: one serpent per locus through every dataset, plus a category analysis of what drives shared loci">
-      Locus Serpent Plot
+    <button class="btn btn-secondary" onclick="openLocusMatrix()" title="Find the loci and genes shared across datasets; the run opens as a Locus Serpent Plot and as a Gene Constellation">
+      Compare datasets
     </button>
     <button class="btn btn-secondary" onclick="openSusiex()">
       SuSiEx
@@ -428,7 +425,7 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
   </div>
 
   <div class="table-wrap" style="margin-top:1.5rem">
-    <h3 style="font-size:0.95rem;margin:0 0 0.5rem">Gene Constellation runs</h3>
+    <h3 style="font-size:0.95rem;margin:0 0 0.5rem">Cross-dataset runs</h3>
     <table>
       <thead>
         <tr>
@@ -438,34 +435,13 @@ table.gsearch-table a.gsearch-open:hover { background: #0b5a46; }
           <th>Loci</th>
           <th>Status</th>
           <th>Created</th>
-          <th>Actions</th>
+          <th>Views and actions</th>
         </tr>
       </thead>
-      <tbody id="locus-matrix-tbody"></tbody>
+      <tbody id="runs-tbody"></tbody>
     </table>
-    <div class="empty" id="locus-matrix-empty" style="display:none">
-      <p>No Gene Constellation runs yet. Click <b>Gene Constellation</b> above to compare datasets.</p>
-    </div>
-  </div>
-
-  <div class="table-wrap" style="margin-top:1.5rem">
-    <h3 style="font-size:0.95rem;margin:0 0 0.5rem">Locus Serpent Plot runs</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Datasets</th>
-          <th>Ref Panel</th>
-          <th>Loci</th>
-          <th>Status</th>
-          <th>Created</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="serpent-tbody"></tbody>
-    </table>
-    <div class="empty" id="serpent-empty" style="display:none">
-      <p>No Locus Serpent Plot runs yet. Click <b>Locus Serpent Plot</b> above, pick the datasets to compare, and run it.</p>
+    <div class="empty" id="runs-empty" style="display:none">
+      <p>No cross-dataset runs yet. Click <b>Compare datasets</b> above, pick the datasets and run it.</p>
     </div>
   </div>
 
@@ -830,9 +806,33 @@ function wizRenderFiles(c) {
   c.innerHTML =
     wizFileField('GWAS summary statistics', 'gwas.file', cfg['gwas.file'] || '')
     + wizFileField('Loci definition file', 'loci.file', cfg['loci.file'] || '')
+    + '<div class="wiz-field"><label>Genome build of the summary statistics</label>'
+    + '<div class="file-row"><select data-wiz-key="genome.build" id="wiz-files-build" onchange="wiz.cfg[\'genome.build\']=this.value">'
+    + '<option value="GRCh37"' + ((cfg['genome.build'] || 'GRCh37') === 'GRCh37' ? ' selected' : '') + '>GRCh37 / hg19 (default)</option>'
+    + '<option value="GRCh38"' + (cfg['genome.build'] === 'GRCh38' ? ' selected' : '') + '>GRCh38 / hg38</option></select>'
+    + '<button class="btn btn-secondary" onclick="wizUseInstalledRefs()">Use installed references</button></div>'
+    + '<div class="hint" id="wiz-refs-hint">Fills the gene annotation and the 1000 Genomes EUR panel of this build, as installed by <code>setup</code>.</div></div>'
     + wizFileField('GFF3 gene annotation', 'gff3.file', cfg['gff3.file'] || '')
     + wizFileField('Reference panel (PLINK prefix)', 'ref.panel.path', cfg['ref.panel.path'] || '')
     + '<div class="hint" style="margin-top:-0.5rem">Select any of .bed/.bim/.fam — the prefix is inferred.</div>';
+}
+
+async function wizUseInstalledRefs() {
+  var build = document.getElementById('wiz-files-build').value;
+  wiz.cfg['genome.build'] = build;
+  var hint = document.getElementById('wiz-refs-hint');
+  try {
+    var d = await (await fetch(API + '/api/reference-defaults?build=' + encodeURIComponent(build))).json();
+    [['gff3.file', d.gff3], ['ref.panel.path', d.panel]].forEach(function(kv) {
+      if (!kv[1]) return;
+      wiz.cfg[kv[0]] = kv[1];
+      var el = document.querySelector('[data-wiz-key="' + kv[0] + '"]');
+      if (el) el.value = kv[1];
+    });
+    hint.innerHTML = d.missing && d.missing.length
+      ? '<span style="color:#b45309">Not installed for ' + esc(d.build) + ': ' + esc(d.missing.join('; ')) + '. Run <code>' + esc(d.setup) + '</code> in the app folder.</span>'
+      : '<span style="color:#065f46">Using the installed ' + esc(d.build) + ' references.</span>';
+  } catch (e) { hint.textContent = 'Could not read the installed references.'; }
 }
 
 function wizFileField(label, key, val) {
@@ -1669,6 +1669,7 @@ function lociRenderResult(d) {
     + '<tr><td>Candidate SNPs (pre-filter)</td><td>' + (d.candidate_snps || 0).toLocaleString() + '</td></tr>'
     + '<tr><td>Written to</td><td>input/loci.txt</td></tr>'
     + '</table>'
+    + (d.warning ? '<p style="margin-top:0.75rem;font-size:0.85rem;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:0.5rem 0.75rem">' + esc(d.warning) + '</p>' : '')
     + '<p style="margin-top:0.75rem;font-size:0.85rem;color:#555">Project config updated. Reprocess to load loci into viewer.</p>'
     + '<div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem">'
     + '<button class="btn btn-secondary" onclick="lociClose()">Later</button>'
@@ -2118,7 +2119,7 @@ var gcWiz = { step: 0 }; // Gene Constellation setup wizard state (separate from
 var GC_STEPS = ['Datasets', 'Reference panel & review'];
 
 function gcTitle() {
-  return gcWiz.kind === 'serpent' ? 'Locus Serpent Plot — cross-dataset comparison' : 'Gene Constellation — cross-dataset comparison';
+  return 'Compare datasets — cross-dataset run';
 }
 
 async function openLocusMatrix(kind) {
@@ -2259,7 +2260,7 @@ async function runLocusMatrix() {
   var name = gcWiz.name || '';
 
   var box = document.getElementById('locus-matrix-box');
-  box.innerHTML = '<h3>' + (gcWiz.kind === 'serpent' ? 'Locus Serpent Plot' : 'Gene Constellation') + '</h3>'
+  box.innerHTML = '<h3>Cross-dataset run</h3>'
     + '<div id="lm-progress" style="margin:1rem 0;font-size:0.85rem;color:#475569">Starting…</div>'
     + '<div style="display:flex;justify-content:flex-end">'
     + '<button class="btn btn-secondary" onclick="closeLocusMatrix()">Close</button></div>';
@@ -2300,9 +2301,8 @@ function pollLocusMatrixProgress(jobId) {
         } else {
           el.innerHTML = '<div style="color:#065f46;margin-bottom:0.75rem">Done &mdash; ' + p.loci_found + ' loci found.</div>'
             + '<div style="display:flex;gap:0.5rem">'
-            + (gcWiz.kind === 'serpent'
-                ? '<a class="btn btn-primary" href="serpent_plot.html?job=' + encodeURIComponent(jobId) + '" target="_blank">View Serpent Plot &rarr;</a>'
-                : '<a class="btn btn-primary" href="gene_constellation.html?job=' + encodeURIComponent(jobId) + '" target="_blank">View Constellation &rarr;</a>')
+            + '<a class="btn btn-primary" href="serpent_plot.html?job=' + encodeURIComponent(jobId) + '" target="_blank">Serpent Plot &rarr;</a>'
+            + '<a class="btn btn-primary" href="gene_constellation.html?job=' + encodeURIComponent(jobId) + '" target="_blank">Gene Constellation &rarr;</a>'
             + '<a class="btn btn-secondary" href="' + API + '/api/locus-matrix-export?job=' + encodeURIComponent(jobId) + '">Export Excel</a>'
             + '</div>';
         }
@@ -2657,16 +2657,15 @@ async function deleteEvidence(projectId, name) {
 async function loadLocusMatrixJobs() {
   try {
     var jobs = await (await fetch(API + '/api/locus-matrix-jobs')).json();
-    renderRunsTable('locus-matrix-tbody', 'locus-matrix-empty', jobs.filter(function(j) { return j.kind !== 'serpent'; }), 'constellation');
-    renderRunsTable('serpent-tbody', 'serpent-empty', jobs.filter(function(j) { return j.kind === 'serpent'; }), 'serpent');
+    renderRunsTable('runs-tbody', 'runs-empty', jobs);
   } catch (e) {
-    ['locus-matrix-tbody', 'serpent-tbody'].forEach(function(id) { var t = document.getElementById(id); if (t) t.innerHTML = ''; });
+    var t = document.getElementById('runs-tbody'); if (t) t.innerHTML = '';
   }
 }
 
-// One runs table (Gene Constellation or Locus Serpent Plot). Both views read the same completed job,
-// so every finished run also links to the other view.
-function renderRunsTable(tbodyId, emptyId, jobs, kind) {
+// The cross-dataset runs table. A run is one computation; the Locus Serpent Plot and the Gene Constellation
+// are two views of it, so every finished run links to both.
+function renderRunsTable(tbodyId, emptyId, jobs) {
   var tbody = document.getElementById(tbodyId);
   var empty = document.getElementById(emptyId);
   if (!tbody) return;
@@ -2679,11 +2678,8 @@ function renderRunsTable(tbodyId, emptyId, jobs, kind) {
       ? '<span class="badge badge-error" title="' + escAttr(j.error || '') + '">Error</span>'
       : '<span class="badge badge-proc">Running…</span>';
     var jid = encodeURIComponent(j.job_id);
-    var primary = kind === 'serpent'
-      ? '<a class="btn btn-secondary" href="serpent_plot.html?job=' + jid + '" target="_blank">View</a> '
-        + '<a class="btn btn-secondary" href="gene_constellation.html?job=' + jid + '" target="_blank" title="Same run as a Gene Constellation">Constellation</a> '
-      : '<a class="btn btn-secondary" href="gene_constellation.html?job=' + jid + '" target="_blank">View</a> '
-        + '<a class="btn btn-secondary" href="serpent_plot.html?job=' + jid + '" target="_blank" title="Same run as a Locus Serpent Plot">Serpent</a> ';
+    var primary = '<a class="btn btn-secondary" href="serpent_plot.html?job=' + jid + '" target="_blank">Serpent Plot</a> '
+      + '<a class="btn btn-secondary" href="gene_constellation.html?job=' + jid + '" target="_blank">Gene Constellation</a> ';
     var actions = (j.status === 'done'
       ? primary + '<a class="btn btn-secondary" href="' + API + '/api/locus-matrix-export?job=' + jid + '">Export</a> '
       : '')
@@ -3133,7 +3129,7 @@ function exdataRender(st) {
     el.style.display = 'block';
     el.innerHTML = '<div class="ex-row"><div class="ex-text ex-ok"><b>' + (job.kind === 'import' ? 'Import finished.' : 'Example data added.') + '</b> '
       + esc(job.message || '') + '.' + (job.kind === 'import' ? ' Projects without their summary statistics are marked <i>Example data</i> (results only).'
-        : ' The projects are marked <i>Example data</i>; the Locus Serpent Plot and Gene Constellation runs over all 30 are in the runs lists below.') + '</div>'
+        : ' The projects are marked <i>Example data</i>; the cross-dataset run over all 30 is in Cross-dataset runs below.') + '</div>'
       + '<button class="btn btn-secondary" onclick="exdataHide()">Close</button></div>';
     return;
   }
