@@ -5,6 +5,12 @@ set -e
 echo "=== Building LYNXgwas ==="
 mkdir -p bin
 
+# lib/ is git-ignored: a fresh clone (CI, Docker) takes the jars bundled with the Python launcher
+if ! ls lib/*.jar >/dev/null 2>&1; then
+  mkdir -p lib
+  cp python/lynxgwas/_bundled/lib/*.jar lib/
+fi
+
 LIBCP=""
 for f in lib/*.jar; do
   [ -e "$f" ] && LIBCP="$LIBCP:$f"
