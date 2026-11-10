@@ -41,7 +41,7 @@ PLACEHOLDERS = {
     "@@LYNX_GWAS@@": "<workspace>/example-data/gwas (original summary statistics, not included)",
 }
 TEXT_EXT = {".json", ".properties", ".tsv", ".txt", ".log", ".r", ".yaml", ".yml", ".js", ".csv",
-            ".md", ".key", ".snps", ".cojo", ".master", ".html"}
+            ".md", ".key", ".snps", ".cojo", ".master", ".html", ".suppl"}
 # Bulky inputs/intermediates inside a run folder: rebuilt by the tool whenever it is run again
 RUN_EXCLUDE = re.compile(r"^(finemap\.ld|finemap\.z|ref_bigsnp\..*|susie_input\.tsv|cojo_input\.ma|ma_audit\.tsv|"
                          r"magma_snploc\.txt|magma_input\.pval|magma_step\d+\.genes\.annot\.txt|.*\.cma\.cojo|"
@@ -203,11 +203,15 @@ def main() -> None:
         for i, (p, arc) in enumerate(files):
             if Path(arc).suffix.lower() in TEXT_EXT or arc.endswith("/config.properties"):
                 raw = p.read_bytes()
+                # tool logs written on Windows can be cp1252 (an em dash is 0x97): stored as UTF-8, which the
+                # installer reads, so their paths are rewritten too
                 try:
                     text = raw.decode("utf-8")
                 except UnicodeDecodeError:
-                    z.write(p, arc)
-                    continue
+                    try:
+                        text = raw.decode("cp1252")
+                    except UnicodeDecodeError:
+                        text = raw.decode("latin-1")
                 new = project_overrides(arc, rewrite(text, rules))
                 for s in a.leak:
                     if s.lower() in new.lower():
@@ -216,6 +220,11 @@ def main() -> None:
                     rewritten.append(arc)
                 z.writestr(zipfile.ZipInfo.from_file(p, arc), new.encode("utf-8"), zipfile.ZIP_DEFLATED, 9)
             else:
+                if p.stat().st_size < 50_000_000:
+                    raw = p.read_bytes().lower()
+                    for s in a.leak:
+                        if s.lower().encode() in raw:
+                            leaks["(not rewritten) " + arc.split("/")[-1]] += 1
                 z.write(p, arc)
             if i % 5000 == 0:
                 print(f"  {i:,}/{len(files):,}", flush=True)
