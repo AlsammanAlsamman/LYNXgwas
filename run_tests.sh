@@ -42,6 +42,7 @@ javac -encoding UTF-8 -d bin -cp "bin$LIBCP" \
   tests/DirectionCheckTest.java \
   tests/OfflineModeTest.java \
   tests/GwasFilesTest.java \
+  tests/GenomeRsidRecoveryTest.java \
   tests/LociPanelChromosomeTest.java \
   tests/ToolLocatorTest.java \
   tests/PlinkRunnerTest.java \
@@ -161,6 +162,8 @@ echo "--- OfflineModeTest ---"
 java -cp "bin$LIBCP" OfflineModeTest src || FAILED=1
 echo "--- GwasFilesTest ---"
 java -cp "bin$LIBCP" GwasFilesTest || FAILED=1
+echo "--- GenomeRsidRecoveryTest ---"
+java -cp "bin$LIBCP" GenomeRsidRecoveryTest || FAILED=1
 echo "--- LociPanelChromosomeTest ---"
 java -cp "bin$LIBCP" LociPanelChromosomeTest || FAILED=1
 

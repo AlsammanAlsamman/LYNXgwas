@@ -116,7 +116,9 @@ workspace or computer, with a progress bar, without touching projects that are a
 
 **Loci & annotation**
 - Automatic loci identification from GWAS summary stats via PLINK clumping (or supply your own `loci.txt`)
-- rsID recovery from a local dbSNP VCF, with optional NCBI/gnomAD API completion for anything left unmatched
+- rsID recovery from a local dbSNP VCF, with optional NCBI/gnomAD API completion for anything left unmatched;
+  genome-wide recovery gives every SNP of a file without rsIDs its dbSNP rsID by position and alleles
+  (`java -cp "bin:lib/*" rsid.GenomeRsidRecovery <dbsnp.vcf.gz> <gwas> <chr col> <pos col> <ea col> <nea col>`)
 - Gene-track annotation from a GENCODE GFF3, with nearest-gene lookup outside the plotted window
 - Custom annotation tracks from your own TSV files (point/bar/flag styles) via an in-viewer wizard
 - Genome-wide QC triage: genomic inflation factor (λ<sub>GC</sub>), with an optional LDSC-intercept comparison to separate genuine polygenicity from confounding
